@@ -1,7 +1,7 @@
-
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: todo_postgres
     environment:
       POSTGRES_DB: todoapp
       POSTGRES_USER: postgres
@@ -12,14 +12,15 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    build: ./backend
-    ports:
-      - "8080:8080"
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: todo_backend
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -27,15 +28,20 @@ services:
       DB_PASSWORD: password
       DB_NAME: todoapp
       PORT: 8080
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: todo_frontend
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - backend
     restart: unless-stopped
