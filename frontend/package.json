@@ -1,0 +1,14 @@
+{
+  "name": "MinimalDo-Frontend",
+  "version": "1.0.0",
+  "description": "MinimalDo - Todo App",
+  "main": "index.js",
+  "scripts": {
+    "dev": "http-server . -p 3000 -c-1",
+    "build": "echo 'Build complete'",
+    "start": "http-server . -p 3000"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
