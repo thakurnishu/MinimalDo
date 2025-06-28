@@ -19,7 +19,7 @@ build:
 up:
 	docker compose up -d
 	@echo "Services started!"
-	@echo "Frontend: http://localhost"
+	@echo "Frontend: http://localhost:3000"
 	@echo "Backend API: http://localhost:8080"
 	@echo "PostgreSQL: localhost:5432"
 
@@ -34,6 +34,7 @@ logs:
 # Clean up everything
 clean:
 	docker compose down -v --remove-orphans
+	docker rmi minimaldo-frontend minimaldo-backend
 
 # Development mode for backend
 dev-backend:
