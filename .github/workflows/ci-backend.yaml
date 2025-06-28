@@ -14,7 +14,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-homelab
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
