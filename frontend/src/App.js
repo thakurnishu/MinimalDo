@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-const API_URL = 'http://backend:8080/api';
+const API_URL = process.env.REACT_APP_API_URL;
 
 function App() {
   const [todos, setTodos] = useState([]);
@@ -20,9 +20,10 @@ function App() {
       const response = await fetch(`${API_URL}/todos`);
       if (!response.ok) throw new Error('Failed to fetch todos');
       const data = await response.json();
-      setTodos(data);
+      setTodos(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
+      setTodos([]); // Ensure todos is never null
     } finally {
       setLoading(false);
     }
@@ -73,8 +74,8 @@ function App() {
     }
   };
 
-  const total = todos.length;
-  const completed = todos.filter(t => t.completed).length;
+  const total = Array.isArray(todos) ? todos.length : 0;
+  const completed = Array.isArray(todos) ? todos.filter(t => t.completed).length : 0;
   const pending = total - completed;
 
   return (
@@ -110,7 +111,7 @@ function App() {
               <p>{error}</p>
               <button onClick={loadTodos}>Retry</button>
             </div>
-          ) : todos.length === 0 ? (
+          ) : total === 0 ? (
             <div className="empty-state">
               <div style={{ fontSize: '4em', marginBottom: '20px' }}>📝</div>
               <h3>No tasks yet</h3>
@@ -168,4 +169,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

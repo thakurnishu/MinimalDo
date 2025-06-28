@@ -36,6 +36,7 @@ clean:
 	docker compose down -v --remove-orphans
 	docker rmi minimaldo-frontend minimaldo-backend
 
+
 # Development mode for backend
 dev-backend:
 	@echo "Starting backend in development mode..."
@@ -58,3 +59,7 @@ deps:
 	@echo "Installing backend dependencies..."
 	cd backend && go mod tidy
 	@echo "Dependencies installed!"
+
+# List Table Content
+db-tables:
+	docker exec -it todo_postgres bash -c 'psql -U postgres -d todoapp -c "SELECT * FROM todos"'

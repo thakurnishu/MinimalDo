@@ -39,6 +39,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: "http://localhost:8080/api"
     container_name: todo_frontend
     ports:
       - "3000:80"

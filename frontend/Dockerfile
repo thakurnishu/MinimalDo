@@ -1,14 +1,30 @@
-# Use nginx as base image to serve static files
+# Dockerfile
+FROM node:22-alpine AS build
+
+# Set working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy rest of the code
+COPY . .
+
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
+# Build the React app
+RUN npm run build
+
+# Stage 2: Serve the build with Nginx
 FROM nginx:alpine
-
-# Copy the HTML file to nginx html directory
-COPY index.html /usr/share/nginx/html/index.html
-
-# Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose port 80
 EXPOSE 80
 
-# Start nginx
+# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
