@@ -1,4 +1,4 @@
-name: CI Backend (MinimalDO)
+name: CI Backend (MinimalDo)
 
 on:
   workflow_dispatch:
