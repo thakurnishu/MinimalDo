@@ -1,4 +1,4 @@
-name: CI Matrix Build (MinimalDo)
+name: CI MinimalDo
 
 # Configure these variables in your GitHub repository settings:
 # Settings → Secrets and variables → Actions → Variables
