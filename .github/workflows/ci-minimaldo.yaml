@@ -27,25 +27,7 @@ jobs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
     steps:
-      - name: Skip if no changes
-        id: should_skip
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger - building all components"
-            echo "skip=false" >> $GITHUB_OUTPUT
-          elif [ "${{ matrix.component.name }}" = "backend" ] && [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
-            echo "Backend changes detected - building backend"
-            echo "skip=false" >> $GITHUB_OUTPUT
-          elif [ "${{ matrix.component.name }}" = "frontend" ] && [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
-            echo "Frontend changes detected - building frontend"
-            echo "skip=false" >> $GITHUB_OUTPUT
-          else
-            echo "No changes detected for ${{ matrix.component.name }} - skipping"
-            echo "skip=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout source
-        if: steps.should_skip.outputs.skip != 'true'
         uses: actions/checkout@v4
       
       - name: Check for changes
@@ -80,7 +62,25 @@ jobs:
             build_args: --build-arg REACT_APP_API_URL
 
     steps:
+      - name: Skip if no changes
+        id: should_skip
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger - building all components"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.component.name }}" = "backend" ] && [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            echo "Backend changes detected - building backend"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.component.name }}" = "frontend" ] && [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+            echo "Frontend changes detected - building frontend"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "No changes detected for ${{ matrix.component.name }} - skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout source
+        if: steps.should_skip.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Set commit ID
