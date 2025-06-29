@@ -27,7 +27,25 @@ jobs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
     steps:
+      - name: Skip if no changes
+        id: should_skip
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger - building all components"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.component.name }}" = "backend" ] && [ "${{ needs.changes.outputs.backend }}" = "true" ]; then
+            echo "Backend changes detected - building backend"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.component.name }}" = "frontend" ] && [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then
+            echo "Frontend changes detected - building frontend"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "No changes detected for ${{ matrix.component.name }} - skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout source
+        if: steps.should_skip.outputs.skip != 'true'
         uses: actions/checkout@v4
       
       - name: Check for changes
@@ -55,27 +73,23 @@ jobs:
           - name: backend
             working_dir: backend
             image_name: minimaldo-backend
-            condition: ${{ needs.changes.outputs.backend == 'true' }}
             build_args: ""
           - name: frontend
             working_dir: frontend
             image_name: minimaldo-frontend
-            condition: ${{ needs.changes.outputs.frontend == 'true' }}
             build_args: --build-arg REACT_APP_API_URL
-
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      matrix.component.condition
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Set commit ID
+        if: steps.should_skip.outputs.skip != 'true'
         id: commit
         run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
+        if: steps.should_skip.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -83,6 +97,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Docker image - ${{ matrix.component.name }}
+        if: steps.should_skip.outputs.skip != 'true'
         working-directory: ${{ matrix.component.working_dir }}
         run: |
           echo "Building ${{ matrix.component.name }} image for commit: ${{ steps.commit.outputs.short_sha }}"
@@ -112,6 +127,7 @@ jobs:
           eval $BUILD_CMD
 
       - name: Push Docker image - ${{ matrix.component.name }}
+        if: steps.should_skip.outputs.skip != 'true'
         working-directory: ${{ matrix.component.working_dir }}
         run: |
           echo "Pushing ${{ matrix.component.name }} images for commit: ${{ steps.commit.outputs.short_sha }}"
@@ -119,6 +135,7 @@ jobs:
           docker push ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
 
       - name: Image build summary
+        if: steps.should_skip.outputs.skip != 'true'
         run: |
           echo "✅ Successfully built and pushed ${{ matrix.component.name }} images:"
           echo "📦 Latest: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest"
