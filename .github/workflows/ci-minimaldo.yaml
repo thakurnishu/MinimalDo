@@ -1,0 +1,120 @@
+name: CI Matrix Build (MinimalDo)
+
+# Configure these variables in your GitHub repository settings:
+# Settings → Secrets and variables → Actions → Variables
+# - API_URL: Your backend API URL (e.g., https://api.minimaldo.com)
+# - FRONTEND_BUILD_ENV: Environment for frontend build (production/staging)
+
+env:
+  REGISTRY: ghcr.io
+  REPOSITORY_OWNER: ${{ github.repository_owner }}
+  BACKEND_API_URL: "http://localhost:8080/api"
+
+on:
+  workflow_dispatch:
+  
+  push:
+    branches: [ main ]
+    paths:
+      - backend/**
+      - frontend/**
+
+jobs:
+  # Detect which components changed
+  changes:
+    runs-on: ubuntu-homelab
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      
+      - name: Check for changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+
+  build-and-push:
+    needs: changes
+    runs-on: ubuntu-homelab
+    #runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write  # This allows pushing to GHCR
+
+    strategy:
+      matrix:
+        component:
+          - name: backend
+            working_dir: backend
+            image_name: minimaldo-backend
+            condition: ${{ needs.changes.outputs.backend == 'true' }}
+            build_args: ""
+          - name: frontend
+            working_dir: frontend
+            image_name: minimaldo-frontend
+            condition: ${{ needs.changes.outputs.frontend == 'true' }}
+            build_args: |
+              --build-arg REACT_APP_API_URL=${{  env.BACKEND_API_URL  }}
+
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      matrix.component.condition
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set commit ID
+        id: commit
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image - ${{ matrix.component.name }}
+        working-directory: ${{ matrix.component.working_dir }}
+        run: |
+          echo "Building ${{ matrix.component.name }} image for commit: ${{ steps.commit.outputs.short_sha }}"
+          
+          # Build command with conditional build args
+          BUILD_CMD="docker build"
+          
+          # Add build args if they exist
+          if [ -n "${{ matrix.component.build_args }}" ]; then
+            echo "Adding build arguments for ${{ matrix.component.name }}:"
+            echo "${{ matrix.component.build_args }}"
+            BUILD_CMD="$BUILD_CMD ${{ matrix.component.build_args }}"
+          fi
+          
+          # Add tags and context
+          BUILD_CMD="$BUILD_CMD \
+            -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest \
+            -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} ."
+          
+          echo "Executing: $BUILD_CMD"
+          eval $BUILD_CMD
+
+      - name: Push Docker image - ${{ matrix.component.name }}
+        working-directory: ${{ matrix.component.working_dir }}
+        run: |
+          echo "Pushing ${{ matrix.component.name }} images for commit: ${{ steps.commit.outputs.short_sha }}"
+          docker push ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
+
+      - name: Image build summary
+        run: |
+          echo "✅ Successfully built and pushed ${{ matrix.component.name }} images:"
+          echo "📦 Latest: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest"
+          echo "📦 Tagged: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}"
