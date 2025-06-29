@@ -61,8 +61,7 @@ jobs:
             working_dir: frontend
             image_name: minimaldo-frontend
             condition: ${{ needs.changes.outputs.frontend == 'true' }}
-            build_args: |
-              --build-arg REACT_APP_API_URL=${{  env.BACKEND_API_URL  }}
+            build_args: --build-arg REACT_APP_API_URL
 
     if: |
       github.event_name == 'workflow_dispatch' || 
@@ -94,8 +93,14 @@ jobs:
           # Add build args if they exist
           if [ -n "${{ matrix.component.build_args }}" ]; then
             echo "Adding build arguments for ${{ matrix.component.name }}:"
-            echo "${{ matrix.component.build_args }}"
-            BUILD_CMD="$BUILD_CMD ${{ matrix.component.build_args }}"
+            # For frontend, append the API URL from environment
+            if [ "${{ matrix.component.name }}" = "frontend" ]; then
+              BUILD_ARGS="${{ matrix.component.build_args }}=${{ env.BACKEND_API_URL }}"
+            else
+              BUILD_ARGS="${{ matrix.component.build_args }}"
+            fi
+            echo "$BUILD_ARGS"
+            BUILD_CMD="$BUILD_CMD $BUILD_ARGS"
           fi
           
           # Add tags and context
