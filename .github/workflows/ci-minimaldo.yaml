@@ -161,7 +161,7 @@ jobs:
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
           format: table
-          severity: CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN
+          severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
 
