@@ -20,7 +20,7 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 RUN npm run build
 
 # Stage 2: Serve the build with Nginx
-FROM nginx:alpine
+FROM nginx:alpine3.22
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose port 80
