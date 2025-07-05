@@ -1,14 +1,10 @@
 name: CI MinimalDo
 
-# Configure these variables in your GitHub repository settings:
-# Settings → Secrets and variables → Actions → Variables
-# - API_URL: Your backend API URL (e.g., https://api.minimaldo.com)
-# - FRONTEND_BUILD_ENV: Environment for frontend build (production/staging)
-
 env:
   REGISTRY: ghcr.io
   REPOSITORY_OWNER: ${{ github.repository_owner }}
   BACKEND_API_URL: "http://localhost:8080/api"
+  SONAR_HOST_URL: 'http://sonarqube-sonarqube.sonarqube:9000'
 
 on:
   workflow_dispatch:
@@ -20,6 +16,39 @@ on:
       - frontend/**
 
 jobs:
+  sonarqube:
+    runs-on: ubuntu-homelab
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+
+    - name: SonarQube Scanner
+      uses: sonarsource/sonarqube-scan-action@v5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+    # Quality Gate Check
+    - name: SonarQube Quality Gate check
+      id: sonarqube-quality-gate-check
+      uses: sonarsource/sonarqube-quality-gate-action@master
+      timeout-minutes: 5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+    # Optional: Fail the job if Quality Gate fails
+    - name: "Quality Gate Status"
+      run: |
+        echo "Quality Gate Status: ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+        if [ "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" != "PASSED" ]; then
+          echo "Quality Gate failed!"
+          exit 1
+        fi
+
   # Detect which components changed
   changes:
     runs-on: ubuntu-homelab
@@ -43,7 +72,6 @@ jobs:
   build-and-push:
     needs: changes
     runs-on: ubuntu-homelab
-    #runs-on: ubuntu-latest
 
     permissions:
       contents: read
