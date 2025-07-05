@@ -162,7 +162,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
           format: table
           severity: CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN
-          exit-code: '0'
+          exit-code: '1'
           ignore-unfixed: true
 
       - name: Push Docker image - ${{ matrix.component.name }}
@@ -172,10 +172,3 @@ jobs:
           echo "Pushing ${{ matrix.component.name }} images for commit: ${{ steps.commit.outputs.short_sha }}"
           docker push ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
           docker push ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
-
-      - name: Image build summary
-        if: steps.should_skip.outputs.skip != 'true'
-        run: |
-          echo "✅ Successfully built and pushed ${{ matrix.component.name }} images:"
-          echo "📦 Latest: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest"
-          echo "📦 Tagged: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}"
