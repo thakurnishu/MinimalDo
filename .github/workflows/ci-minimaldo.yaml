@@ -156,12 +156,13 @@ jobs:
           eval $BUILD_CMD
 
       - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
-        uses: aquasecurity/trivy-action@v0.32.0
+        uses: aquasecurity/trivy-action@0.32.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
           format: table
           severity: CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN
           exit-code: '0'
+          ignore-unfixed: true
 
       - name: Push Docker image - ${{ matrix.component.name }}
         if: steps.should_skip.outputs.skip != 'true'
