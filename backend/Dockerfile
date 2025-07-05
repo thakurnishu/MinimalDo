@@ -9,8 +9,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o minimaldo-backend .
 
 # Run stage
-FROM alpine:latest
-WORKDIR /root/
-COPY --from=builder /app/minimaldo-backend .
+FROM scratch
+COPY --from=builder /app/minimaldo-backend /minimaldo-backend
 EXPOSE 8080
-CMD ["./minimaldo-backend"]
+ENTRYPOINT ["/minimaldo-backend"]
