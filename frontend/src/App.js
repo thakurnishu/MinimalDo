@@ -2,12 +2,50 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import { API_URL } from './utils/env';
 
+// Edit Todo Form Component
+const EditTodoForm = ({ todo, onSave, onCancel }) => {
+  const [title, setTitle] = useState(todo.title);
+  const [description, setDescription] = useState(todo.description || '');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ ...todo, title, description });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="edit-form">
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="edit-input"
+        required
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        className="edit-textarea"
+        placeholder="Add description (optional)"
+      />
+      <div className="edit-actions">
+        <button type="submit" className="save-btn">
+          Save
+        </button>
+        <button type="button" onClick={onCancel} className="cancel-btn">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+};
+
 function App() {
   const [todos, setTodos] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -47,19 +85,26 @@ function App() {
     }
   };
 
-  const toggleTodo = async (id, completed) => {
-    const todo = todos.find(t => t.id === id);
-    if (!todo) return;
+  const updateTodo = async (updatedTodo) => {
     try {
-      const response = await fetch(`${API_URL}/todos/${id}`, {
+      const response = await fetch(`${API_URL}/todos/${updatedTodo.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...todo, completed })
+        body: JSON.stringify(updatedTodo)
       });
+      if (!response.ok) throw new Error('Failed to update todo');
       const updated = await response.json();
-      setTodos(prev => prev.map(t => (t.id === id ? updated : t)));
+      setTodos(prev => prev.map(t => (t.id === updatedTodo.id ? updated : t)));
+      setEditingId(null);
     } catch (err) {
-      setError('Failed to update todo');
+      setError(err.message);
+    }
+  };
+
+  const toggleTodo = (id, completed) => {
+    const todo = todos.find(t => t.id === id);
+    if (todo) {
+      updateTodo({ ...todo, completed });
     }
   };
 
@@ -119,25 +164,38 @@ function App() {
           ) : (
             todos.map(todo => (
               <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
-                <div className="todo-header">
-                  <input
-                    type="checkbox"
-                    className="todo-checkbox"
-                    checked={todo.completed}
-                    onChange={(e) => toggleTodo(todo.id, e.target.checked)}
+                {editingId === todo.id ? (
+                  <EditTodoForm
+                    todo={todo}
+                    onSave={updateTodo}
+                    onCancel={() => setEditingId(null)}
                   />
-                  <div className="todo-title">{todo.title}</div>
-                </div>
-                {todo.description && <div className="todo-description">{todo.description}</div>}
-                <div className="todo-actions">
-                  <button className="danger" onClick={() => deleteTodo(todo.id)}>
-                    <span>🗑️</span> Delete
-                  </button>
-                </div>
-                <div className="todo-meta">
-                  <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
-                  <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
-                </div>
+                ) : (
+                  <>
+                    <div className="todo-header">
+                      <input
+                        type="checkbox"
+                        className="todo-checkbox"
+                        checked={todo.completed}
+                        onChange={(e) => toggleTodo(todo.id, e.target.checked)}
+                      />
+                      <div className="todo-title">{todo.title}</div>
+                    </div>
+                    {todo.description && <div className="todo-description">{todo.description}</div>}
+                    <div className="todo-actions">
+                      <button onClick={() => setEditingId(todo.id)} className="edit-btn">
+                        <span>✏️</span> Edit
+                      </button>
+                      <button className="danger" onClick={() => deleteTodo(todo.id)}>
+                        <span>🗑️</span> Delete
+                      </button>
+                    </div>
+                    <div className="todo-meta">
+                      <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
+                      <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
