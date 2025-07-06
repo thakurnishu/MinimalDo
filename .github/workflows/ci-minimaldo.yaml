@@ -3,7 +3,7 @@ name: CI MinimalDo
 env:
   REGISTRY: ghcr.io
   REPOSITORY_OWNER: ${{ github.repository_owner }}
-  BACKEND_API_URL: "http://localhost:8080/api"
+  BACKEND_API_URL: "http://minimaldo-backend-svc/api"
   SONAR_HOST_URL: 'http://sonarqube-sonarqube.sonarqube:9000'
 
 on:
