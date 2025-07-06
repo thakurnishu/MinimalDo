@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import './App.css';
 import { API_URL } from './utils/env';
 
@@ -38,6 +39,20 @@ const EditTodoForm = ({ todo, onSave, onCancel }) => {
   );
 };
 
+// PropTypes validation
+EditTodoForm.propTypes = {
+  todo: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    completed: PropTypes.bool.isRequired,
+    created_at: PropTypes.string,
+    updated_at: PropTypes.string
+  }).isRequired,
+  onSave: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired
+};
+
 function App() {
   const [todos, setTodos] = useState([]);
   const [title, setTitle] = useState('');
@@ -50,6 +65,76 @@ function App() {
   useEffect(() => {
     loadTodos();
   }, []);
+
+  // Helper function to render todo list content
+  const renderTodoListContent = () => {
+    if (loading) {
+      return (
+        <div className="loading">
+          <div className="spinner"></div>
+          Loading your todos...
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="empty-state">
+          <div style={{ fontSize: '4em', marginBottom: '20px' }}>⚠️</div>
+          <h3>Error</h3>
+          <p>{error}</p>
+          <button onClick={loadTodos}>Retry</button>
+        </div>
+      );
+    }
+
+    if (total === 0) {
+      return (
+        <div className="empty-state">
+          <div style={{ fontSize: '4em', marginBottom: '20px' }}>📝</div>
+          <h3>No tasks yet</h3>
+          <p>Add your first task using the form on the right!</p>
+        </div>
+      );
+    }
+
+    return todos.map(todo => (
+      <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+        {editingId === todo.id ? (
+          <EditTodoForm
+            todo={todo}
+            onSave={updateTodo}
+            onCancel={() => setEditingId(null)}
+          />
+        ) : (
+          <>
+            <div className="todo-header">
+              <input
+                type="checkbox"
+                className="todo-checkbox"
+                checked={todo.completed}
+                onChange={(e) => toggleTodo(todo.id, e.target.checked)}
+              />
+              <div className="todo-title">{todo.title}</div>
+            </div>
+            {todo.description && <div className="todo-description">{todo.description}</div>}
+            <div className="todo-actions">
+              <button onClick={() => setEditingId(todo.id)} className="edit-btn">
+                <span>✏️</span> Edit
+              </button>
+              <button className="danger" onClick={() => deleteTodo(todo.id)}>
+                <span>🗑️</span> Delete
+              </button>
+            </div>
+            <div className="todo-meta">
+              <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
+              <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
+            </div>
+          </>
+        )}
+      </div>
+    ));
+  };
 
   const loadTodos = async () => {
     try {
@@ -142,62 +227,7 @@ function App() {
         </div>
 
         <div id="todoList" className="todo-list">
-          {loading ? (
-            <div className="loading">
-              <div className="spinner"></div>
-              Loading your todos...
-            </div>
-          ) : error ? (
-            <div className="empty-state">
-              <div style={{ fontSize: '4em', marginBottom: '20px' }}>⚠️</div>
-              <h3>Error</h3>
-              <p>{error}</p>
-              <button onClick={loadTodos}>Retry</button>
-            </div>
-          ) : total === 0 ? (
-            <div className="empty-state">
-              <div style={{ fontSize: '4em', marginBottom: '20px' }}>📝</div>
-              <h3>No tasks yet</h3>
-              <p>Add your first task using the form on the right!</p>
-            </div>
-          ) : (
-            todos.map(todo => (
-              <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
-                {editingId === todo.id ? (
-                  <EditTodoForm
-                    todo={todo}
-                    onSave={updateTodo}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <>
-                    <div className="todo-header">
-                      <input
-                        type="checkbox"
-                        className="todo-checkbox"
-                        checked={todo.completed}
-                        onChange={(e) => toggleTodo(todo.id, e.target.checked)}
-                      />
-                      <div className="todo-title">{todo.title}</div>
-                    </div>
-                    {todo.description && <div className="todo-description">{todo.description}</div>}
-                    <div className="todo-actions">
-                      <button onClick={() => setEditingId(todo.id)} className="edit-btn">
-                        <span>✏️</span> Edit
-                      </button>
-                      <button className="danger" onClick={() => deleteTodo(todo.id)}>
-                        <span>🗑️</span> Delete
-                      </button>
-                    </div>
-                    <div className="todo-meta">
-                      <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
-                      <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))
-          )}
+          {renderTodoListContent()}
         </div>
       </div>
 
