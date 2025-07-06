@@ -3,7 +3,6 @@ name: CI MinimalDo
 env:
   REGISTRY: ghcr.io
   REPOSITORY_OWNER: ${{ github.repository_owner }}
-  BACKEND_API_URL: "http://minimaldo-backend-svc/api"
   SONAR_HOST_URL: 'http://sonarqube-sonarqube.sonarqube:9000'
 
 on:
@@ -84,11 +83,9 @@ jobs:
           - name: backend
             working_dir: backend
             image_name: minimaldo-backend
-            build_args: ""
           - name: frontend
             working_dir: frontend
             image_name: minimaldo-frontend
-            build_args: --build-arg REACT_APP_API_URL
 
     steps:
       - name: Skip if no changes
@@ -131,24 +128,8 @@ jobs:
         run: |
           echo "Building ${{ matrix.component.name }} image for commit: ${{ steps.commit.outputs.short_sha }}"
           
-          # Build command with conditional build args
-          BUILD_CMD="docker build"
-          
-          # Add build args if they exist
-          if [ -n "${{ matrix.component.build_args }}" ]; then
-            echo "Adding build arguments for ${{ matrix.component.name }}:"
-            # For frontend, append the API URL from environment
-            if [ "${{ matrix.component.name }}" = "frontend" ]; then
-              BUILD_ARGS="${{ matrix.component.build_args }}=${{ env.BACKEND_API_URL }}"
-            else
-              BUILD_ARGS="${{ matrix.component.build_args }}"
-            fi
-            echo "$BUILD_ARGS"
-            BUILD_CMD="$BUILD_CMD $BUILD_ARGS"
-          fi
-          
           # Add tags and context
-          BUILD_CMD="$BUILD_CMD \
+          BUILD_CMD="docker build \
             -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest \
             -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} ."
           
