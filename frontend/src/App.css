@@ -240,6 +240,9 @@ button.danger:hover {
     color: #718096;
     margin-bottom: 15px;
     line-height: 1.5;
+    white-space: pre-line; /* This will preserve line breaks and collapse other whitespace */
+    word-break: break-word; /* Prevent long words from overflowing */
+    padding: 8px 0;
 }
 
 .todo-actions {
