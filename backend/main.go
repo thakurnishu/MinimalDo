@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,23 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 )
-
-type Todo struct {
-	ID          int       `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Completed   bool      `json:"completed"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-type Server struct {
-	db *sql.DB
-}
 
 func main() {
 	// Database connection
@@ -57,27 +44,26 @@ func main() {
 
 	server := &Server{db: db}
 
+	// CORS setup
+	router := gin.Default()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{"X-Requested-With", "Content-Type", "Authorization"},
+		AllowMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
+	}))
+
 	// Setup routes
-	r := mux.NewRouter()
-	
-	// API routes
-	api := r.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/todos", server.getTodos).Methods("GET")
-	api.HandleFunc("/todos", server.createTodo).Methods("POST")
-	api.HandleFunc("/todos/{id}", server.updateTodo).Methods("PUT")
-	api.HandleFunc("/todos/{id}", server.deleteTodo).Methods("DELETE")
-	api.HandleFunc("/health", server.healthCheck).Methods("GET")
+	api := router.Group("/api")
+	api.GET("/todos", server.getTodos)
+	api.POST("/todos", server.createTodo)
+	api.PUT("/todos/:id", server.updateTodo)
+	api.DELETE("/todos/:id", server.deleteTodo)
+	api.GET("/health", server.healthCheck)
 
-	// CORS setup using gorilla/handlers
-	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})
-
-	handler := handlers.CORS(originsOk, headersOk, methodsOk)(r)
 	
 	port := getEnv("PORT", "8080")
 	log.Printf("Server starting on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+	router.Run(":"+port)
 }
 
 func initDB(db *sql.DB) error {
@@ -110,14 +96,14 @@ func initDB(db *sql.DB) error {
 	return err
 }
 
-func (s *Server) getTodos(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getTodos(c *gin.Context){
 	rows, err := s.db.Query(`
 		SELECT id, title, description, completed, created_at, updated_at 
 		FROM todos 
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -127,20 +113,20 @@ func (s *Server) getTodos(w http.ResponseWriter, r *http.Request) {
 		var t Todo
 		err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.Completed, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		todos = append(todos, t)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(todos)
+	
+	c.JSON(http.StatusOK, todos)
 }
 
-func (s *Server) createTodo(w http.ResponseWriter, r *http.Request) {
+
+func (s *Server) createTodo(c *gin.Context){
 	var t Todo
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := c.BindJSON(&t); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -153,27 +139,23 @@ func (s *Server) createTodo(w http.ResponseWriter, r *http.Request) {
 	err := s.db.QueryRow(query, t.Title, t.Description, t.Completed).
 		Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(t)
+	c.JSON(http.StatusOK,t)	
 }
 
-func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+func (s *Server) updateTodo(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invaild ID"})
 		return
 	}
 
 	var t Todo
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if err := c.BindJSON(&t); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 
 	query := `
@@ -187,52 +169,51 @@ func (s *Server) updateTodo(w http.ResponseWriter, r *http.Request) {
 		Scan(&t.ID, &t.Title, &t.Description, &t.Completed, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Todo not found", http.StatusNotFound)
+			c.JSON(http.StatusNotFound, gin.H{"error": "Todo not found"})
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(t)
+	c.JSON(http.StatusOK, t)
 }
 
-func (s *Server) deleteTodo(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+
+func (s *Server) deleteTodo(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invaild ID"})
 	}
 
 	result, err := s.db.Exec("DELETE FROM todos WHERE id = $1", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	if rowsAffected == 0 {
-		http.Error(w, "Todo not found", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Todo not fount"})
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
 
-func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
+func (s *Server) healthCheck(c *gin.Context) {
 	response := map[string]string{
 		"status": "healthy",
 		"time":   time.Now().Format(time.RFC3339),
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+
+	c.JSON(http.StatusOK, response)
 }
 
 func getEnv(key, defaultValue string) string {
