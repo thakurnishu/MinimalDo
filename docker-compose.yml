@@ -32,7 +32,6 @@ services:
       SERVICE_NAME: MinimalDo
       OTEL_EXPORTER_OTLP_ENDPOINT: "https://localhost:4318"
       INSECURE_MODE: true
-
     ports:
       - "8090:8090"
     depends_on:
