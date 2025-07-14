@@ -55,6 +55,7 @@ jobs:
 
   # Detect which components changed
   changes:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-homelab
     needs: sonarqube
     outputs:
@@ -77,11 +78,10 @@ jobs:
   build-and-push:
     needs: changes
     runs-on: ubuntu-homelab
-
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write  # This allows pushing to GHCR
-
     strategy:
       matrix:
         component:
@@ -91,7 +91,6 @@ jobs:
           - name: frontend
             working_dir: frontend
             image_name: minimaldo-frontend
-
     steps:
       - name: Skip if no changes
         id: should_skip
