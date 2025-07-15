@@ -61,10 +61,75 @@ function App() {
   const [error, setError] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
 
   useEffect(() => {
     loadTodos();
   }, []);
+
+  // Drag and drop handlers
+  const handleDragStart = (e, todo) => {
+    setDraggedItem(todo);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (e, todo) => {
+    e.preventDefault();
+    setDragOverItem(todo);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    // Only clear dragOverItem if we're actually leaving the item
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDragOverItem(null);
+    }
+  };
+
+  const handleDrop = (e, targetTodo) => {
+    e.preventDefault();
+    
+    if (!draggedItem || draggedItem.id === targetTodo.id) {
+      return;
+    }
+
+    const draggedIndex = todos.findIndex(todo => todo.id === draggedItem.id);
+    const targetIndex = todos.findIndex(todo => todo.id === targetTodo.id);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      return;
+    }
+
+    // Create new array with reordered items
+    const newTodos = [...todos];
+    const [removed] = newTodos.splice(draggedIndex, 1);
+    newTodos.splice(targetIndex, 0, removed);
+
+    setTodos(newTodos);
+    setDraggedItem(null);
+    setDragOverItem(null);
+
+    // Optionally, you can add an API call here to persist the new order
+    // updateTodoOrder(newTodos);
+  };
 
   // Helper function to render todo list content
   const renderTodoListContent = () => {
@@ -99,7 +164,17 @@ function App() {
     }
 
     return todos.map(todo => (
-      <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+      <div 
+        key={todo.id} 
+        className={`todo-item ${todo.completed ? 'completed' : ''} ${dragOverItem && dragOverItem.id === todo.id ? 'drag-over' : ''}`}
+        draggable={editingId !== todo.id}
+        onDragStart={(e) => handleDragStart(e, todo)}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragEnter={(e) => handleDragEnter(e, todo)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, todo)}
+      >
         {editingId === todo.id ? (
           <EditTodoForm
             todo={todo}
@@ -109,6 +184,7 @@ function App() {
         ) : (
           <>
             <div className="todo-header">
+              <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
               <input
                 type="checkbox"
                 className="todo-checkbox"
@@ -202,6 +278,19 @@ function App() {
     }
   };
 
+  // Optional: Function to persist the new order to backend
+  // const updateTodoOrder = async (reorderedTodos) => {
+  //   try {
+  //     await fetch(`${API_URL}/todos/reorder`, {
+  //       method: 'PUT',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ todos: reorderedTodos.map((todo, index) => ({ id: todo.id, order: index })) })
+  //     });
+  //   } catch (err) {
+  //     console.error('Failed to update todo order:', err);
+  //   }
+  // };
+
   const total = Array.isArray(todos) ? todos.length : 0;
   const completed = Array.isArray(todos) ? todos.filter(t => t.completed).length : 0;
   const pending = total - completed;
@@ -210,6 +299,10 @@ function App() {
     <div className="container">
       <div className={`main-content ${sidebarCollapsed ? 'expanded' : ''}`}>
         <h1>📝 MinimalDo</h1>
+        
+        <div className="drag-info">
+          <p>💡 <strong>Tip:</strong> Drag tasks by the ⋮⋮ handle to reorder them!</p>
+        </div>
 
         <div className="stats">
           <div className="stat-card">
