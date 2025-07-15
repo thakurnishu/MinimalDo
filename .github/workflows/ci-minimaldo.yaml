@@ -117,7 +117,7 @@ jobs:
         if: steps.should_skip.outputs.skip != 'true'
         id: commit
         run: |
-          echo "short_sha=${{ env.GITHUB_BASE_REF }}-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
+          echo "short_sha=main-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
         if: steps.should_skip.outputs.skip != 'true'
