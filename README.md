@@ -73,31 +73,3 @@ curl -X POST http://localhost:8080/api/todos \
 ```bash
 curl http://localhost:8080/api/todos
 ```
-
-## 🎨 UI Features
-
-- **Responsive Design:** Adapts to mobile and desktop
-- **Collapsible Sidebar:** Toggle with the floating button (like Claude's interface)
-- **Smooth Animations:** Hover effects and transitions
-- **Statistics Dashboard:** Real-time task counters
-- **Modern Styling:** Glassmorphism effects and gradients
-
-## 🛡️ Production Considerations
-
-### Security
-- Add authentication/authorization
-- Use HTTPS in production
-- Implement rate limiting
-- Add input validation and sanitization
-
-### Performance
-- Add database connection pooling
-- Implement caching (Redis)
-- Add database indices
-- Use CDN for frontend assets
-
-### Monitoring
-- Add logging middleware
-- Implement health checks
-- Add metrics collection
-- Set up alerting
