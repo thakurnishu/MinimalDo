@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 
 	_ "github.com/lib/pq"
@@ -11,21 +12,32 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func main() {
-	frontendURL := getEnv("FRONTEND_URL", "http://localhost:3000")
-	log.Printf("CORS: Allowing origin: %s", frontendURL)
+var (
+	db *sql.DB
+)
 
+func init() {
+	loadConfig()
+}
+
+func main() {
 	// Otel 
 	cleanup := initTracer()
-	defer cleanup(context.Background())
+	defer func() {
+		if err := cleanup(context.Background()); err != nil {
+			log.Fatalf("Failed to shutdown tracer: %v", err)
+		}
+	}()
 
 	db := setupDB()
 	defer db.Close()
-	server := &Server{db: db}
+	server := &Server{
+		db: db,
+	}
 
 
-	// CORS setup
 	router := gin.Default()
+	// CORS setup
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{frontendURL},
 		AllowHeaders: []string{"X-Requested-With", "Content-Type", "Authorization"},
@@ -36,15 +48,6 @@ func main() {
 
 	// Setup routes
 	api := router.Group("/api")
-
-//	api.Use(otelgin.Middleware(serviceName))
-//
-//	api.Use(cors.New(cors.Config{
-//		AllowOrigins: []string{frontendURL},
-//		AllowHeaders: []string{"X-Requested-With", "Content-Type", "Authorization"},
-//		AllowMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
-//		ExposeHeaders: []string{"Content-Length"},
-//	}))
 	{
 		api.GET("/todos", server.getTodos)
 		api.POST("/todos", server.createTodo)
@@ -53,7 +56,6 @@ func main() {
 		api.GET("/health", server.healthCheck)
 	}
 	
-	port := getEnv("PORT", "8080")
 	log.Printf("Server starting on port %s", port)
 	router.Run(":"+port)
 }
