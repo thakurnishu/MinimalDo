@@ -21,6 +21,7 @@ on:
 
 jobs:
   sonarqube:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-homelab
     
     steps:
