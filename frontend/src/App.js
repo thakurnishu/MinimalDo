@@ -316,17 +316,21 @@ function App() {
 
   const updateTodoState = (id, updated) => {
     if (dateRange === 'day') {
-      setTodos(prev =>
-        prev.map(t => (t.id === id ? updated : t))
-      );
+      setTodos(prev => updateFlatTodos(prev, id, updated));
     } else {
-      setDateGroups(prev =>
-        prev.map(group => ({
-          ...group,
-          todos: group.todos.map(t => (t.id === id ? updated : t))
-        }))
-      );
+      setDateGroups(prev => updateGroupedTodos(prev, id, updated));
     }
+  };
+
+  const updateFlatTodos = (todos, id, updated) => {
+    return todos.map(t => (t.id === id ? updated : t));
+  };
+
+  const updateGroupedTodos = (groups, id, updated) => {
+    return groups.map(group => ({
+      ...group,
+      todos: updateFlatTodos(group.todos, id, updated)
+    }));
   };
 
   const toggleTodo = (id, completed) => {
@@ -345,24 +349,41 @@ function App() {
   };
 
   const deleteTodo = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    const confirmed = confirmDelete();
+    if (!confirmed) return;
+
     try {
-      await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
-      
-      if (dateRange === 'day') {
-        setTodos(prev => prev.filter(t => t.id !== id));
-      } else {
-        setDateGroups(prev => 
-          prev.map(group => ({
-            ...group,
-            todos: group.todos.filter(t => t.id !== id)
-          })).filter(group => group.todos.length > 0)
-        );
-      }
+      await deleteTodoFromServer(id);
+      removeTodoFromState(id);
     } catch (err) {
       setError('Failed to delete todo');
     }
   };
+
+  const confirmDelete = () => {
+    return window.confirm('Are you sure you want to delete this task?');
+  };
+
+  const deleteTodoFromServer = async (id) => {
+    const response = await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Delete request failed');
+  };
+
+  const removeTodoFromState = (id) => {
+    if (dateRange === 'day') {
+      setTodos(prev => prev.filter(t => t.id !== id));
+    } else {
+      setDateGroups(prev =>
+        prev
+          .map(group => ({
+            ...group,
+            todos: group.todos.filter(t => t.id !== id)
+          }))
+          .filter(group => group.todos.length > 0)
+      );
+    }
+  };
+
 
   // Rendering functions
   const renderTodoItem = (todo) => (
