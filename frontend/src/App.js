@@ -518,7 +518,7 @@ function App() {
   return (
     <div className="container">
       <div className={`main-content ${sidebarCollapsed ? 'expanded' : ''}`}>
-        <h1>📝 MinimalDo</h1>
+        <h1>MinimalDo</h1>
         
         <div className="date-controls">
           <button 
@@ -549,10 +549,6 @@ function App() {
             <option value="week">Weekly</option>
             <option value="month">Monthly</option>
           </select>
-        </div>
-
-        <div className="drag-info">
-          <p>💡 <strong>Tip:</strong> Drag tasks by the ⋮⋮ handle to reorder them!</p>
         </div>
 
         <div className="stats">
