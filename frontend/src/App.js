@@ -112,7 +112,8 @@ function App() {
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
         return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
-      case 'month':
+      }
+      case 'month': {
         return currentDate.toLocaleDateString('en-US', { 
           month: 'long', 
           year: 'numeric' 
