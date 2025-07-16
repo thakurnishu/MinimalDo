@@ -53,7 +53,7 @@ func initDB(db *sql.DB) error {
 		FOR EACH ROW
 		EXECUTE FUNCTION update_updated_at_column();
 	`
-	
+
 	_, err := db.Exec(query)
 	return err
 }
