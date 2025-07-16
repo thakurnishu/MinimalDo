@@ -196,7 +196,6 @@ button.danger:hover {
     padding: 20px;
     border-radius: 15px;
     border: 2px solid #e2e8f0;
-    transition: all 0.3s ease;
     position: relative;
     transition: all 0.2s ease;
 }
