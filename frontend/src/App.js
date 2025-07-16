@@ -39,7 +39,6 @@ const EditTodoForm = ({ todo, onSave, onCancel }) => {
   );
 };
 
-// PropTypes validation
 EditTodoForm.propTypes = {
   todo: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
@@ -54,7 +53,9 @@ EditTodoForm.propTypes = {
 };
 
 function App() {
+  // State management
   const [todos, setTodos] = useState([]);
+  const [dateGroups, setDateGroups] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(true);
@@ -63,10 +64,103 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverItem, setDragOverItem] = useState(null);
+  const [dateRange, setDateRange] = useState('day');
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Date navigation functions
+  const navigateDate = (direction) => {
+    const newDate = new Date(currentDate);
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+    switch (dateRange) {
+      case 'day':
+        newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+        break;
+      case 'week':
+        newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+        break;
+      case 'month':
+        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+        break;
+      default:
+        break;
+    }
+
+    if (newDate >= oneYearAgo) {
+      setCurrentDate(newDate);
+    }
+  };
+
+  const handleRangeChange = (e) => {
+    setDateRange(e.target.value);
+  };
+
+  const formatPeriodHeader = () => {
+    switch (dateRange) {
+      case 'day':
+        return currentDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      case 'week':
+        const start = new Date(currentDate);
+        start.setDate(currentDate.getDate() - currentDate.getDay());
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+      case 'month':
+        return currentDate.toLocaleDateString('en-US', { 
+          month: 'long', 
+          year: 'numeric' 
+        });
+      default:
+        return currentDate.toLocaleDateString();
+    }
+  };
+
+  const isPrevDisabled = () => {
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return currentDate <= oneYearAgo;
+  };
+
+  // Data loading
+  const loadTodos = async () => {
+    try {
+      setLoading(true);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const response = await fetch(
+        `${API_URL}/todos/by-date?range=${dateRange}&date=${dateStr}`
+      );
+      
+      if (!response.ok) throw new Error('Failed to fetch todos');
+      
+      const data = await response.json();
+      
+      if (dateRange === 'day') {
+        setTodos(data || []);
+        setDateGroups([]);
+      } else {
+        setDateGroups(data || []);
+        setTodos([]);
+      }
+      
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      setTodos([]);
+      setDateGroups([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadTodos();
-  }, []);
+  }, [currentDate, dateRange]);
 
   // Drag and drop handlers
   const handleDragStart = (e, todo) => {
@@ -94,7 +188,6 @@ function App() {
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    // Only clear dragOverItem if we're actually leaving the item
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
@@ -111,27 +204,196 @@ function App() {
       return;
     }
 
-    const draggedIndex = todos.findIndex(todo => todo.id === draggedItem.id);
-    const targetIndex = todos.findIndex(todo => todo.id === targetTodo.id);
+    const sourceArray = dateRange === 'day' ? todos : 
+                      dateGroups.find(g => g.todos.some(t => t.id === draggedItem.id))?.todos || [];
+    
+    const targetArray = dateRange === 'day' ? todos : 
+                      dateGroups.find(g => g.todos.some(t => t.id === targetTodo.id))?.todos || [];
+
+    const draggedIndex = sourceArray.findIndex(todo => todo.id === draggedItem.id);
+    const targetIndex = targetArray.findIndex(todo => todo.id === targetTodo.id);
 
     if (draggedIndex === -1 || targetIndex === -1) {
       return;
     }
 
-    // Create new array with reordered items
-    const newTodos = [...todos];
-    const [removed] = newTodos.splice(draggedIndex, 1);
-    newTodos.splice(targetIndex, 0, removed);
+    if (dateRange === 'day') {
+      const newTodos = [...todos];
+      const [removed] = newTodos.splice(draggedIndex, 1);
+      newTodos.splice(targetIndex, 0, removed);
+      setTodos(newTodos);
+    } else {
+      const newDateGroups = [...dateGroups];
+      const sourceGroupIndex = newDateGroups.findIndex(g => g.todos.some(t => t.id === draggedItem.id));
+      const targetGroupIndex = newDateGroups.findIndex(g => g.todos.some(t => t.id === targetTodo.id));
+      
+      if (sourceGroupIndex === targetGroupIndex) {
+        const newTodos = [...newDateGroups[sourceGroupIndex].todos];
+        const [removed] = newTodos.splice(draggedIndex, 1);
+        newTodos.splice(targetIndex, 0, removed);
+        newDateGroups[sourceGroupIndex].todos = newTodos;
+      } else {
+        const sourceTodos = [...newDateGroups[sourceGroupIndex].todos];
+        const targetTodos = [...newDateGroups[targetGroupIndex].todos];
+        const [removed] = sourceTodos.splice(draggedIndex, 1);
+        targetTodos.splice(targetIndex, 0, removed);
+        newDateGroups[sourceGroupIndex].todos = sourceTodos;
+        newDateGroups[targetGroupIndex].todos = targetTodos;
+      }
+      
+      setDateGroups(newDateGroups);
+    }
 
-    setTodos(newTodos);
     setDraggedItem(null);
     setDragOverItem(null);
-
-    // Optionally, you can add an API call here to persist the new order
-    // updateTodoOrder(newTodos);
   };
 
-  // Helper function to render todo list content
+  // CRUD Operations
+  const addTodo = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    try {
+      const response = await fetch(`${API_URL}/todos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, completed: false })
+      });
+      if (!response.ok) throw new Error('Failed to create todo');
+      const newTodo = await response.json();
+      
+      if (dateRange === 'day') {
+        setTodos(prev => [newTodo, ...prev]);
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        const groupIndex = dateGroups.findIndex(g => g.date === today);
+        
+        if (groupIndex >= 0) {
+          const updatedGroups = [...dateGroups];
+          updatedGroups[groupIndex].todos.unshift(newTodo);
+          setDateGroups(updatedGroups);
+        } else {
+          setDateGroups(prev => [
+            { date: today, todos: [newTodo] },
+            ...prev
+          ]);
+        }
+      }
+      
+      setTitle('');
+      setDescription('');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const updateTodo = async (updatedTodo) => {
+    try {
+      const response = await fetch(`${API_URL}/todos/${updatedTodo.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTodo)
+      });
+      if (!response.ok) throw new Error('Failed to update todo');
+      const updated = await response.json();
+      
+      if (dateRange === 'day') {
+        setTodos(prev => prev.map(t => (t.id === updatedTodo.id ? updated : t)));
+      } else {
+        setDateGroups(prev => prev.map(group => ({
+          ...group,
+          todos: group.todos.map(t => t.id === updatedTodo.id ? updated : t)
+        })));
+      }
+      
+      setEditingId(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const toggleTodo = (id, completed) => {
+    const todo = dateRange === 'day' 
+      ? todos.find(t => t.id === id)
+      : dateGroups.flatMap(g => g.todos).find(t => t.id === id);
+      
+    if (todo) {
+      updateTodo({ ...todo, completed });
+    }
+  };
+
+  const deleteTodo = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    try {
+      await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
+      
+      if (dateRange === 'day') {
+        setTodos(prev => prev.filter(t => t.id !== id));
+      } else {
+        setDateGroups(prev => 
+          prev.map(group => ({
+            ...group,
+            todos: group.todos.filter(t => t.id !== id)
+          })).filter(group => group.todos.length > 0)
+        );
+      }
+    } catch (err) {
+      setError('Failed to delete todo');
+    }
+  };
+
+  // Rendering functions
+  const renderTodoItem = (todo) => (
+    <div 
+      key={todo.id} 
+      className={`todo-item ${todo.completed ? 'completed' : ''} ${
+        dragOverItem && dragOverItem.id === todo.id ? 'drag-over' : ''
+      }`}
+      draggable={editingId !== todo.id}
+      onDragStart={(e) => handleDragStart(e, todo)}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragEnter={(e) => handleDragEnter(e, todo)}
+      onDragLeave={handleDragLeave}
+      onDrop={(e) => handleDrop(e, todo)}
+    >
+      {editingId === todo.id ? (
+        <EditTodoForm
+          todo={todo}
+          onSave={updateTodo}
+          onCancel={() => setEditingId(null)}
+        />
+      ) : (
+        <>
+          <div className="todo-header">
+            <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
+            <input
+              type="checkbox"
+              className="todo-checkbox"
+              checked={todo.completed}
+              onChange={(e) => toggleTodo(todo.id, e.target.checked)}
+            />
+            <div className="todo-title">{todo.title}</div>
+          </div>
+          {todo.description && (
+            <div className="todo-description">{todo.description}</div>
+          )}
+          <div className="todo-actions">
+            <button onClick={() => setEditingId(todo.id)} className="edit-btn">
+              <span>✏️</span> Edit
+            </button>
+            <button className="danger" onClick={() => deleteTodo(todo.id)}>
+              <span>🗑️</span> Delete
+            </button>
+          </div>
+          <div className="todo-meta">
+            <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
+            <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   const renderTodoListContent = () => {
     if (loading) {
       return (
@@ -153,146 +415,42 @@ function App() {
       );
     }
 
-    if (total === 0) {
+    if (dateGroups.length > 0) {
+      return dateGroups.map((group) => (
+        <div key={group.date} className="date-group">
+          <div className="date-header">
+            {new Date(group.date).toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </div>
+          {group.todos.map(renderTodoItem)}
+        </div>
+      ));
+    }
+
+    if (todos.length === 0) {
       return (
         <div className="empty-state">
           <div style={{ fontSize: '4em', marginBottom: '20px' }}>📝</div>
-          <h3>No tasks yet</h3>
-          <p>Add your first task using the form on the right!</p>
+          <h3>No tasks for this period</h3>
+          <p>Add a new task using the form on the right!</p>
         </div>
       );
     }
 
-    return todos.map(todo => (
-      <div 
-        key={todo.id} 
-        className={`todo-item ${todo.completed ? 'completed' : ''} ${dragOverItem && dragOverItem.id === todo.id ? 'drag-over' : ''}`}
-        draggable={editingId !== todo.id}
-        onDragStart={(e) => handleDragStart(e, todo)}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDragEnter={(e) => handleDragEnter(e, todo)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(e, todo)}
-      >
-        {editingId === todo.id ? (
-          <EditTodoForm
-            todo={todo}
-            onSave={updateTodo}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : (
-          <>
-            <div className="todo-header">
-              <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
-              <input
-                type="checkbox"
-                className="todo-checkbox"
-                checked={todo.completed}
-                onChange={(e) => toggleTodo(todo.id, e.target.checked)}
-              />
-              <div className="todo-title">{todo.title}</div>
-            </div>
-            {todo.description && <div className="todo-description">{todo.description}</div>}
-            <div className="todo-actions">
-              <button onClick={() => setEditingId(todo.id)} className="edit-btn">
-                <span>✏️</span> Edit
-              </button>
-              <button className="danger" onClick={() => deleteTodo(todo.id)}>
-                <span>🗑️</span> Delete
-              </button>
-            </div>
-            <div className="todo-meta">
-              <span>Created: {new Date(todo.created_at).toLocaleDateString()}</span>
-              <span>Updated: {new Date(todo.updated_at).toLocaleDateString()}</span>
-            </div>
-          </>
-        )}
-      </div>
-    ));
+    return todos.map(renderTodoItem);
   };
 
-  const loadTodos = async () => {
-    try {
-      const response = await fetch(`${API_URL}/todos`);
-      if (!response.ok) throw new Error('Failed to fetch todos');
-      const data = await response.json();
-      setTodos(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err.message);
-      setTodos([]); // Ensure todos is never null
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addTodo = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    try {
-      const response = await fetch(`${API_URL}/todos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, completed: false })
-      });
-      if (!response.ok) throw new Error('Failed to create todo');
-      const newTodo = await response.json();
-      setTodos(prev => [newTodo, ...prev]);
-      setTitle('');
-      setDescription('');
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const updateTodo = async (updatedTodo) => {
-    try {
-      const response = await fetch(`${API_URL}/todos/${updatedTodo.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedTodo)
-      });
-      if (!response.ok) throw new Error('Failed to update todo');
-      const updated = await response.json();
-      setTodos(prev => prev.map(t => (t.id === updatedTodo.id ? updated : t)));
-      setEditingId(null);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const toggleTodo = (id, completed) => {
-    const todo = todos.find(t => t.id === id);
-    if (todo) {
-      updateTodo({ ...todo, completed });
-    }
-  };
-
-  const deleteTodo = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
-    try {
-      await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
-      setTodos(prev => prev.filter(t => t.id !== id));
-    } catch (err) {
-      setError('Failed to delete todo');
-    }
-  };
-
-  // Optional: Function to persist the new order to backend
-  // const updateTodoOrder = async (reorderedTodos) => {
-  //   try {
-  //     await fetch(`${API_URL}/todos/reorder`, {
-  //       method: 'PUT',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({ todos: reorderedTodos.map((todo, index) => ({ id: todo.id, order: index })) })
-  //     });
-  //   } catch (err) {
-  //     console.error('Failed to update todo order:', err);
-  //   }
-  // };
-
-  const total = Array.isArray(todos) ? todos.length : 0;
-  const completed = Array.isArray(todos) ? todos.filter(t => t.completed).length : 0;
+  // Stats calculation - Fixed with null safety
+  const safeTodos = todos || [];
+  const safeDateGroups = dateGroups || [];
+  
+  const total = safeTodos.length + safeDateGroups.reduce((sum, group) => sum + (group.todos?.length || 0), 0);
+  const completed = safeTodos.filter(t => t.completed).length + 
+                   safeDateGroups.reduce((sum, group) => sum + (group.todos?.filter(t => t.completed).length || 0), 0);
   const pending = total - completed;
 
   return (
@@ -300,6 +458,37 @@ function App() {
       <div className={`main-content ${sidebarCollapsed ? 'expanded' : ''}`}>
         <h1>📝 MinimalDo</h1>
         
+        <div className="date-controls">
+          <button 
+            onClick={() => navigateDate('prev')}
+            disabled={isPrevDisabled()}
+            className="nav-btn"
+          >
+            ← Previous
+          </button>
+          
+          <h2 className="current-period">
+            {formatPeriodHeader()}
+          </h2>
+          
+          <button 
+            onClick={() => navigateDate('next')}
+            className="nav-btn"
+          >
+            Next →
+          </button>
+          
+          <select 
+            value={dateRange} 
+            onChange={handleRangeChange}
+            className="range-selector"
+          >
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+          </select>
+        </div>
+
         <div className="drag-info">
           <p>💡 <strong>Tip:</strong> Drag tasks by the ⋮⋮ handle to reorder them!</p>
         </div>
@@ -329,11 +518,21 @@ function App() {
         <form onSubmit={addTodo} className="todo-form">
           <div className="form-group">
             <label htmlFor="title">Task Title *</label>
-            <input id="title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <input 
+              id="title" 
+              type="text" 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              required 
+            />
           </div>
           <div className="form-group">
             <label htmlFor="description">Description</label>
-            <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea 
+              id="description" 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)} 
+            />
           </div>
           <button type="submit">
             <span>➕</span> Add Task

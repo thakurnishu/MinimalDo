@@ -54,6 +54,7 @@ func main() {
 		api.PUT("/todos/:id", server.updateTodo)
 		api.DELETE("/todos/:id", server.deleteTodo)
 		api.GET("/health", server.healthCheck)
+		api.GET("/todos/by-date", server.getTodosByDate)
 	}
 	
 	log.Printf("Server starting on port %s", port)

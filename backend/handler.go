@@ -129,3 +129,84 @@ func (s *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+
+func (s *Server) getTodosByDate(c *gin.Context) {
+    rangeType := c.Query("range") // day/week/month
+    dateStr := c.Query("date")    // YYYY-MM-DD format
+    
+    // Parse and validate date
+    baseDate, err := time.Parse("2006-01-02", dateStr)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
+        return
+    }
+
+    // Calculate date range with 1-year limit
+    now := time.Now()
+    if baseDate.Before(now.AddDate(-1, 0, 0)) {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Date range exceeds 1 year limit"})
+        return
+    }
+
+    var start, end time.Time
+    switch rangeType {
+    case "day":
+        start = time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), 0, 0, 0, 0, time.UTC)
+        end = start.AddDate(0, 0, 1)
+    case "week":
+        start = baseDate.AddDate(0, 0, -int(baseDate.Weekday()))
+        end = start.AddDate(0, 0, 7)
+    case "month":
+        start = time.Date(baseDate.Year(), baseDate.Month(), 1, 0, 0, 0, 0, time.UTC)
+        end = start.AddDate(0, 1, 0)
+    default:
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid range type"})
+        return
+    }
+
+    // Query todos within date range
+    rows, err := s.db.Query(`
+        SELECT id, title, description, completed, created_at, updated_at 
+        FROM todos 
+        WHERE created_at >= $1 AND created_at < $2
+        ORDER BY created_at DESC
+    `, start, end)
+    
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    defer rows.Close()
+
+    var todos []Todo
+    for rows.Next() {
+        var t Todo
+        err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.Completed, &t.CreatedAt, &t.UpdatedAt)
+        if err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            return
+        }
+        todos = append(todos, t)
+    }
+
+    // Group by day if weekly/monthly view
+    if rangeType != "day" {
+        grouped := make(map[string][]Todo)
+        for _, todo := range todos {
+            dateKey := todo.CreatedAt.Format("2006-01-02")
+            grouped[dateKey] = append(grouped[dateKey], todo)
+        }
+
+        var result []GroupedTodos
+        for date, items := range grouped {
+            result = append(result, GroupedTodos{
+                Date:  date,
+                Todos: items,
+            })
+        }
+        c.JSON(http.StatusOK, result)
+        return
+    }
+
+    c.JSON(http.StatusOK, todos)
+}
