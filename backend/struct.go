@@ -17,3 +17,13 @@ type Todo struct {
 type Server struct {
 	db *sql.DB
 }
+
+type DateRange struct {
+    Start time.Time `json:"start"`
+    End   time.Time `json:"end"`
+}
+
+type GroupedTodos struct {
+    Date   string `json:"date"`
+    Todos  []Todo `json:"todos"`
+}
