@@ -58,7 +58,6 @@ jobs:
   changes:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-homelab
-    needs: sonarqube
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
