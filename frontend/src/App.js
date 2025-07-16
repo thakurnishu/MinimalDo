@@ -256,38 +256,51 @@ function App() {
   const addTodo = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
+
     try {
-      const response = await fetch(`${API_URL}/todos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, completed: false })
-      });
-      if (!response.ok) throw new Error('Failed to create todo');
-      const newTodo = await response.json();
-      
-      if (dateRange === 'day') {
-        setTodos(prev => [newTodo, ...prev]);
-      } else {
-        const today = new Date().toISOString().split('T')[0];
-        const groupIndex = dateGroups.findIndex(g => g.date === today);
-        
-        if (groupIndex >= 0) {
-          const updatedGroups = [...dateGroups];
-          updatedGroups[groupIndex].todos.unshift(newTodo);
-          setDateGroups(updatedGroups);
-        } else {
-          setDateGroups(prev => [
-            { date: today, todos: [newTodo] },
-            ...prev
-          ]);
-        }
-      }
-      
-      setTitle('');
-      setDescription('');
+      const newTodo = await createTodo({ title, description, completed: false });
+      insertTodoIntoState(newTodo);
+      clearForm();
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const createTodo = async (todoData) => {
+    const response = await fetch(`${API_URL}/todos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(todoData),
+    });
+
+    if (!response.ok) throw new Error('Failed to create todo');
+    return response.json();
+  };
+
+  const insertTodoIntoState = (newTodo) => {
+    if (dateRange === 'day') {
+      setTodos(prev => [newTodo, ...prev]);
+    } else {
+      const today = getTodayDate();
+      const groupIndex = dateGroups.findIndex(g => g.date === today);
+
+      if (groupIndex >= 0) {
+        const updatedGroups = [...dateGroups];
+        updatedGroups[groupIndex].todos = [newTodo, ...updatedGroups[groupIndex].todos];
+        setDateGroups(updatedGroups);
+      } else {
+        setDateGroups(prev => [{ date: today, todos: [newTodo] }, ...prev]);
+      }
+    }
+  };
+
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const clearForm = () => {
+    setTitle('');
+    setDescription('');
   };
 
   const updateTodo = async (updatedTodo) => {
@@ -371,19 +384,24 @@ function App() {
 
   const removeTodoFromState = (id) => {
     if (dateRange === 'day') {
-      setTodos(prev => prev.filter(t => t.id !== id));
+      setTodos(prev => removeFromFlatList(prev, id));
     } else {
-      setDateGroups(prev =>
-        prev
-          .map(group => ({
-            ...group,
-            todos: group.todos.filter(t => t.id !== id)
-          }))
-          .filter(group => group.todos.length > 0)
-      );
+      setDateGroups(prev => removeFromGroupedList(prev, id));
     }
   };
 
+  const removeFromFlatList = (todos, id) => {
+    return todos.filter(t => t.id !== id);
+  };
+
+  const removeFromGroupedList = (groups, id) => {
+    return groups
+      .map(group => ({
+        ...group,
+        todos: removeFromFlatList(group.todos, id)
+      }))
+      .filter(group => group.todos.length > 0);
+  };
 
   // Rendering functions
   const renderTodoItem = (todo) => (

@@ -207,6 +207,5 @@ func (s *Server) getTodosByDate(c *gin.Context) {
         c.JSON(http.StatusOK, result)
         return
     }
-
     c.JSON(http.StatusOK, todos)
 }
