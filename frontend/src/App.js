@@ -98,14 +98,15 @@ function App() {
 
   const formatPeriodHeader = () => {
     switch (dateRange) {
-      case 'day':
+      case 'day': {
         return currentDate.toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
         });
-      case 'week':
+      }
+      case 'week': {
         const start = new Date(currentDate);
         start.setDate(currentDate.getDate() - currentDate.getDay());
         const end = new Date(start);
@@ -116,8 +117,10 @@ function App() {
           month: 'long', 
           year: 'numeric' 
         });
-      default:
+      }
+      default: {
         return currentDate.toLocaleDateString();
+      }
     }
   };
 
@@ -288,37 +291,56 @@ function App() {
 
   const updateTodo = async (updatedTodo) => {
     try {
-      const response = await fetch(`${API_URL}/todos/${updatedTodo.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedTodo)
-      });
-      if (!response.ok) throw new Error('Failed to update todo');
-      const updated = await response.json();
-      
-      if (dateRange === 'day') {
-        setTodos(prev => prev.map(t => (t.id === updatedTodo.id ? updated : t)));
-      } else {
-        setDateGroups(prev => prev.map(group => ({
-          ...group,
-          todos: group.todos.map(t => t.id === updatedTodo.id ? updated : t)
-        })));
-      }
-      
+      const updated = await sendUpdateRequest(updatedTodo);
+      updateTodoState(updatedTodo.id, updated);
       setEditingId(null);
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const toggleTodo = (id, completed) => {
-    const todo = dateRange === 'day' 
-      ? todos.find(t => t.id === id)
-      : dateGroups.flatMap(g => g.todos).find(t => t.id === id);
-      
-    if (todo) {
-      updateTodo({ ...todo, completed });
+  const sendUpdateRequest = async (todo) => {
+    const response = await fetch(`${API_URL}/todos/${todo.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(todo)
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update todo');
     }
+
+    return response.json();
+  };
+
+  const updateTodoState = (id, updated) => {
+    if (dateRange === 'day') {
+      setTodos(prev =>
+        prev.map(t => (t.id === id ? updated : t))
+      );
+    } else {
+      setDateGroups(prev =>
+        prev.map(group => ({
+          ...group,
+          todos: group.todos.map(t => (t.id === id ? updated : t))
+        }))
+      );
+    }
+  };
+
+  const toggleTodo = (id, completed) => {
+    const todo = findTodoById(id);
+    if (!todo) return;
+
+    updateTodo({ ...todo, completed });
+  };
+
+  const findTodoById = (id) => {
+    if (dateRange === 'day') {
+      return todos.find(t => t.id === id);
+    }
+
+    return dateGroups.flatMap(group => group.todos).find(t => t.id === id);
   };
 
   const deleteTodo = async (id) => {
