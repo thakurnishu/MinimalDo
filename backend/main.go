@@ -36,6 +36,7 @@ func main() {
 	}
 
 	router := gin.Default()
+
 	// CORS setup
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{frontendURL},
