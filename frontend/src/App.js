@@ -256,38 +256,51 @@ function App() {
   const addTodo = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
+
     try {
-      const response = await fetch(`${API_URL}/todos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, completed: false })
-      });
-      if (!response.ok) throw new Error('Failed to create todo');
-      const newTodo = await response.json();
-      
-      if (dateRange === 'day') {
-        setTodos(prev => [newTodo, ...prev]);
-      } else {
-        const today = new Date().toISOString().split('T')[0];
-        const groupIndex = dateGroups.findIndex(g => g.date === today);
-        
-        if (groupIndex >= 0) {
-          const updatedGroups = [...dateGroups];
-          updatedGroups[groupIndex].todos.unshift(newTodo);
-          setDateGroups(updatedGroups);
-        } else {
-          setDateGroups(prev => [
-            { date: today, todos: [newTodo] },
-            ...prev
-          ]);
-        }
-      }
-      
-      setTitle('');
-      setDescription('');
+      const newTodo = await createTodo({ title, description, completed: false });
+      insertTodoIntoState(newTodo);
+      clearForm();
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const createTodo = async (todoData) => {
+    const response = await fetch(`${API_URL}/todos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(todoData),
+    });
+
+    if (!response.ok) throw new Error('Failed to create todo');
+    return response.json();
+  };
+
+  const insertTodoIntoState = (newTodo) => {
+    if (dateRange === 'day') {
+      setTodos(prev => [newTodo, ...prev]);
+    } else {
+      const today = getTodayDate();
+      const groupIndex = dateGroups.findIndex(g => g.date === today);
+
+      if (groupIndex >= 0) {
+        const updatedGroups = [...dateGroups];
+        updatedGroups[groupIndex].todos = [newTodo, ...updatedGroups[groupIndex].todos];
+        setDateGroups(updatedGroups);
+      } else {
+        setDateGroups(prev => [{ date: today, todos: [newTodo] }, ...prev]);
+      }
+    }
+  };
+
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const clearForm = () => {
+    setTitle('');
+    setDescription('');
   };
 
   const updateTodo = async (updatedTodo) => {
@@ -316,17 +329,21 @@ function App() {
 
   const updateTodoState = (id, updated) => {
     if (dateRange === 'day') {
-      setTodos(prev =>
-        prev.map(t => (t.id === id ? updated : t))
-      );
+      setTodos(prev => updateFlatTodos(prev, id, updated));
     } else {
-      setDateGroups(prev =>
-        prev.map(group => ({
-          ...group,
-          todos: group.todos.map(t => (t.id === id ? updated : t))
-        }))
-      );
+      setDateGroups(prev => updateGroupedTodos(prev, id, updated));
     }
+  };
+
+  const updateFlatTodos = (todos, id, updated) => {
+    return todos.map(t => (t.id === id ? updated : t));
+  };
+
+  const updateGroupedTodos = (groups, id, updated) => {
+    return groups.map(group => ({
+      ...group,
+      todos: updateFlatTodos(group.todos, id, updated)
+    }));
   };
 
   const toggleTodo = (id, completed) => {
@@ -345,23 +362,45 @@ function App() {
   };
 
   const deleteTodo = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    const confirmed = confirmDelete();
+    if (!confirmed) return;
+
     try {
-      await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
-      
-      if (dateRange === 'day') {
-        setTodos(prev => prev.filter(t => t.id !== id));
-      } else {
-        setDateGroups(prev => 
-          prev.map(group => ({
-            ...group,
-            todos: group.todos.filter(t => t.id !== id)
-          })).filter(group => group.todos.length > 0)
-        );
-      }
+      await deleteTodoFromServer(id);
+      removeTodoFromState(id);
     } catch (err) {
       setError('Failed to delete todo');
     }
+  };
+
+  const confirmDelete = () => {
+    return window.confirm('Are you sure you want to delete this task?');
+  };
+
+  const deleteTodoFromServer = async (id) => {
+    const response = await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Delete request failed');
+  };
+
+  const removeTodoFromState = (id) => {
+    if (dateRange === 'day') {
+      setTodos(prev => removeFromFlatList(prev, id));
+    } else {
+      setDateGroups(prev => removeFromGroupedList(prev, id));
+    }
+  };
+
+  const removeFromFlatList = (todos, id) => {
+    return todos.filter(t => t.id !== id);
+  };
+
+  const removeFromGroupedList = (groups, id) => {
+    return groups
+      .map(group => ({
+        ...group,
+        todos: removeFromFlatList(group.todos, id)
+      }))
+      .filter(group => group.todos.length > 0);
   };
 
   // Rendering functions
