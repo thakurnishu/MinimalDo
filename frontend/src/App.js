@@ -86,6 +86,7 @@ function App() {
       default:
         break;
     }
+
     if (newDate >= oneYearAgo) {
       setCurrentDate(newDate);
     }
