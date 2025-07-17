@@ -14,7 +14,69 @@ on:
 #      - frontend/**
 
 jobs:
-  pr-scan:
+  sonarqube-scan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-homelab
+    permissions:
+      pull-requests: 'write' #Needed to comment on the PR
+    steps:
+    - name: SonarQube Scanner
+      uses: sonarsource/sonarqube-scan-action@v5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+    # Quality Gate Check
+    - name: SonarQube Quality Gate check
+      id: sonarqube-quality-gate-check
+      uses: sonarsource/sonarqube-quality-gate-action@master
+      continue-on-error: true
+      timeout-minutes: 5
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+    - name: SonarQube Quality Gate Result
+      id: sonarqube_result
+      run: |
+        if [[ "failure" == "${{ steps.sonarqube-quality-gate-check.outcome }}" ]]; then
+          echo "sonarqube_result<<EOF" >> $GITHUB_OUTPUT
+          echo "❌ SonarQube failed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "sonarqube_result<<EOF" >> $GITHUB_OUTPUT
+          echo "✅ SonarQube passed" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create PR Comment
+      uses: actions/github-script@v7
+      env: 
+        SONARQUBE_QUALITY_GATE: "${{ steps.sonarqube_result.outputs.sonarqube_result }}"
+        APPLICATION_NAME: "${{ env.APP_NAME }}"
+      with: 
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `
+          #### Application Name \`${process.env.APPLICATION_NAME}\`
+          #### Sonarqube Result \`${process.env.SONARQUBE_QUALITY_GATE}\`
+          
+          <details><summary>Trivy Scan </summary>
+          \`\`\`
+          ${process.env.TRIVY_CHECK}
+          \`\`\`
+          </details>
+          `;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          });
+        shell: bash
+
+  trivy-scan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-homelab
     permissions:
@@ -28,73 +90,70 @@ jobs:
           - name: frontend
             working_dir: frontend
             image_name: minimaldo-frontend
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Set short commit SHA
-        id: commit
-        run: echo "short_sha=pr-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
+    - name: Set short commit SHA
+      id: commit
+      run: echo "short_sha=pr-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
 
-      - name: Build Docker image - ${{ matrix.component.name }}
-        working-directory: ${{ matrix.component.working_dir }}
-        run: |
-          docker build \
-            -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} .
+    - name: Build Docker image - ${{ matrix.component.name }}
+      working-directory: ${{ matrix.component.working_dir }}
+      run: |
+        docker build \
+          -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} .
 
-      - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
-        id: trivy
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@0.32.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
-          format: github
-          severity: CRITICAL,HIGH
-          exit-code: '1'
-          output: trivy-${{ matrix.component.image_name }}.txt
-          ignore-unfixed: true
+    - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
+      id: trivy
+      continue-on-error: true
+      uses: aquasecurity/trivy-action@0.32.0
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
+        format: json
+        severity: CRITICAL,HIGH
+        exit-code: '1'
+        output: trivy-${{ matrix.component.image_name }}.txt
+        ignore-unfixed: true
 
-      - name: cat trivy - ${{ matrix.component.name }}
-        run: cat trivy-${{ matrix.component.image_name }}.txt
+    - name: cat trivy - ${{ matrix.component.name }}
+      run: cat trivy-${{ matrix.component.image_name }}.txt
 
-      - name: Pass Environment
-        id: passed_env
-        run: |
-          ## Trivy
-          trivy_output=$(<trivy-${{ matrix.component.image_name }}.txt)
-          echo "trivy_output<<EOF" >> $GITHUB_OUTPUT
-          echo "$trivy_output" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+    - name: Pass Environment
+      id: passed_env
+      run: |
+        ## Trivy
+        trivy_output=$(<trivy-${{ matrix.component.image_name }}.txt)
+        echo "trivy_output<<EOF" >> $GITHUB_OUTPUT
+        echo "$trivy_output" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create PR Comment
-        uses: actions/github-script@v7
-        env: 
-          TRIVY_SCAN: "pass"
-          TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_output }}"
-          APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
-          SONARQUBE_QUALITY_GATE: "success"
-        with: 
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `
-            #### Application Name \`${process.env.APPLICATION_NAME}\`
-            #### Sonarqube Quality Gate \`${process.env.SONARQUBE_QUALITY_GATE}\`
-            #### Trivy Scan \`${process.env.TRIVY_SCAN}\`
-            #
-            <details><summary>Trivy Scan </summary>
-            \`\`\`
-            ${process.env.TRIVY_CHECK}
-            \`\`\`
-            </details>
-            `;
+    - name: Create PR Comment
+      uses: actions/github-script@v7
+      env: 
+        TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_output }}"
+        APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
+      with: 
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const output = `
+          #### Application Name \`${process.env.APPLICATION_NAME}\`
+          
+          <details><summary>Check Trivy Scan</summary>
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
-          shell: bash
+          \`\`\`
+          ${process.env.TRIVY_CHECK}
+          \`\`\`
+
+          </details>
+          `;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          });
+        shell: bash
