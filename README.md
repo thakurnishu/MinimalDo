@@ -17,6 +17,7 @@ The project includes GitHub Actions workflows in the `.github/workflows` directo
 ![CI Workflow](.github/images/Minimal-CI-Workflow.excalidraw.png)
 
 ### CD Workflow With GitOps
+![CD Workflow](.github/images/Minimal-CD-Workflow.excalidraw.png)
 
 ## 🛠️ Quick Start
 
