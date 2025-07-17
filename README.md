@@ -14,7 +14,7 @@ Frontend (React)  ←→  Backend (Go)  ←→  Database (PostgreSQL)
 The project includes GitHub Actions workflows in the `.github/workflows` directory for automated testing and deployment. The workflows are triggered on push and pull requests to the main branch.
 
 ### CI Workflow
-![CI Workflow](.github/images/Minimal-CI-Pipeline.excalidraw.png)
+![CI Workflow](.github/images/Minimal-CI-Workflow.excalidraw.png)
 
 ### CD Workflow With GitOps
 ![CD Workflow](.github/images/Minimal-CD-Workflow.excalidraw.png)
