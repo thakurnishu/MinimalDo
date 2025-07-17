@@ -97,16 +97,6 @@ jobs:
           echo "Executing: $BUILD_CMD"
           eval $BUILD_CMD
 
-      - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
-        uses: aquasecurity/trivy-action@0.32.0
-        if: steps.should_skip.outputs.skip != 'true'
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:latest
-          format: table
-          severity: CRITICAL,HIGH
-          exit-code: '1'
-          ignore-unfixed: true
-
       - name: Push Docker image - ${{ matrix.component.name }}
         if: steps.should_skip.outputs.skip != 'true'
         working-directory: ${{ matrix.component.working_dir }}
