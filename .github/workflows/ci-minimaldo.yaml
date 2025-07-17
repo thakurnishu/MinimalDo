@@ -72,16 +72,16 @@ jobs:
         id: passed_env
         run: |
           ## Trivy
-          trivy-${{ matrix.component.image_name }}=$(<trivy-${{ matrix.component.image_name }}.txt)
-          echo "trivy_${{ matrix.component.image_name }}<<EOF" >> $GITHUB_OUTPUT
-          echo "$trivy-${{ matrix.component.image_name }}" >> $GITHUB_OUTPUT
+          trivy_output=$(<trivy-${{ matrix.component.image_name }}.txt)
+          echo "trivy_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$trivy_output" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create PR Comment
         uses: actions/github-script@v7
         env: 
           TRIVY_SCAN: "pass"
-          TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_${{ matrix.component.image_name }} }}"
+          TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_output }}"
           APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
           SONARQUBE_QUALITY_GATE: "success"
         with: 
@@ -94,6 +94,7 @@ jobs:
             #
             <details><summary>Trivy Scan </summary>
             \`\`\`
+            ${process.env.TRIVY_CHECK}
             \`\`\`
             </details>
             `;
