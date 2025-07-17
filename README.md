@@ -4,61 +4,72 @@ A modern, full-stack todo application built with Go backend, vanilla JavaScript 
 
 ## 🏗️ Architecture
 
+![Architecture Diagram](.github/architecture.png)
+
 ```
 Frontend (JavaScript/HTML)  ←→  Backend (Go)  ←→  Database (PostgreSQL)
-     Port 80                    Port 8080           Port 5432
+     Port 3000                   Port 8080           Port 5432
 ```
+
+## 🔄 CI/CD Pipeline
+
+The project includes GitHub Actions workflows in the `.github/workflows` directory for automated testing and deployment. The workflows are triggered on push and pull requests to the main branch.
 
 ## 🛠️ Quick Start
 
-### Docker Compose 
+### Using Makefile (Recommended)
 
-1. **Clone and start all services:**
-   ```bash
-   # Build and start all services
-   make build
-   make up
-   ```
+The project includes a comprehensive Makefile to simplify development and deployment tasks:
 
-2. **Access the application:**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8080
-   - Database: localhost:5432
-
-3. **View logs:**
-   ```bash
-   make logs
-   ```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-**Backend (`backend/main.go`):**
 ```bash
-DB_HOST=localhost      # Database host
-DB_PORT=5432          # Database port
-DB_USER=postgres      # Database user
-DB_PASSWORD=password  # Database password
-DB_NAME=todoapp      # Database name
-PORT=8080            # Server port
+# Build all Docker images
+make build
+
+# Start all services in detached mode
+make up
+
+# Stop all services
+make down
+
+# View logs from all services
+make logs
+
+# Clean up containers, volumes, and images
+make clean
+
+# Run backend in development mode (requires local Go setup)
+make dev-backend
+
+# Serve frontend for development (simple HTTP server)
+make dev-frontend
+
+# Run backend tests
+make test
+
+# View database tables
+make db-tables
+
+# Install/update dependencies
+make deps
 ```
 
-**Frontend (`frontend/index.html`):**
-```javascript
-// Update the API URL in the TodoApp constructor
-this.apiUrl = 'http://localhost:8080/api';
-```
+### Access the Application
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+- Database: localhost:5432
 
 ## 📡 API Endpoints
 
+### Todo Operations
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/todos` | Get all todos |
-| POST | `/api/todos` | Create new todo |
-| PUT | `/api/todos/{id}` | Update todo |
-| DELETE | `/api/todos/{id}` | Delete todo |
-| GET | `/api/health` | Health check |
+| `GET`    | `/api/todos` | Get all todos (sorted by creation date, newest first) |
+| `POST`   | `/api/todos` | Create a new todo |
+| `PUT`    | `/api/todos/:id` | Update an existing todo |
+| `DELETE` | `/api/todos/:id` | Delete a todo |
+| `GET`    | `/api/todos/by-date` | Get todos filtered by date range |
+| `GET`    | `/api/health` | Health check endpoint |
 
 ### Example API Usage
 
@@ -72,5 +83,75 @@ curl -X POST http://localhost:8080/api/todos \
 **Get All Todos:**
 ```bash
 curl http://localhost:8080/api/todos
+```
+
+**Update Todo:**
+```bash
+curl -X PUT http://localhost:8080/api/todos/1 \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Updated Title","description":"Updated description","completed":true}'
+```
+
+**Delete Todo:**
+```bash
+curl -X DELETE http://localhost:8080/api/todos/1
+```
+
+**Get Todos by Date Range:**
+```bash
+# Get todos for a specific day
+curl "http://localhost:8080/api/todos/by-date?range=day&date=2023-01-01"
+
+# Get todos for a specific week (starting from Sunday)
+curl "http://localhost:8080/api/todos/by-date?range=week&date=2023-01-01"
+
+# Get todos for a specific month
+curl "http://localhost:8080/api/todos/by-date?range=month&date=2023-01-01"
+```
+
+**Health Check:**
+```bash
+curl http://localhost:8080/api/health
+```
+
+### Response Formats
+
+**Todo Object:**
+```json
+{
+  "id": 1,
+  "title": "Example Todo",
+  "description": "This is an example todo",
+  "completed": false,
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z"
+}
+```
+
+**Grouped Todos Response (for date ranges):**
+```json
+[
+  {
+    "date": "2023-01-01",
+    "todos": [
+      {
+        "id": 1,
+        "title": "Morning Task",
+        "description": "Complete morning routine",
+        "completed": true,
+        "created_at": "2023-01-01T09:00:00Z",
+        "updated_at": "2023-01-01T09:00:00Z"
+      },
+      {
+        "id": 2,
+        "title": "Afternoon Task",
+        "description": "Work on project",
+        "completed": false,
+        "created_at": "2023-01-01T14:00:00Z",
+        "updated_at": "2023-01-01T14:00:00Z"
+      }
+    ]
+  }
+]
 ```
 
