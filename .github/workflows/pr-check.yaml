@@ -33,7 +33,7 @@ jobs:
 
     - name: SonarQube Quality Gate check
       id: sonarqube-quality-gate-check
-      uses: sonarsource/sonarqube-quality-gate-action@v4  # Use specific version instead of @master
+      uses: sonarsource/sonarqube-quality-gate-action@master
       continue-on-error: true
       timeout-minutes: 5
       env:
@@ -62,7 +62,6 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const output = `
-          #### Application Name \`${process.env.APPLICATION_NAME}\`
           #### SonarQube Quality Gate: ${process.env.SONARQUBE_QUALITY_GATE}
           
           ${process.env.SONARQUBE_STATUS === 'failed' ? '⚠️ Please review and fix the quality gate issues before merging.' : ''}
@@ -148,7 +147,7 @@ jobs:
           const success = process.env.TRIVY_SUCCESS === 'success';
           const status = success ? '✅ PASSED' : '❌ FAILED';
           const output = `
-          #### Application Name \`${process.env.APPLICATION_NAME}\`
+          #### ${process.env.APPLICATION_NAME}
           #### Trivy Security Scan: ${status}
           
           <details><summary>Check Trivy Scan Results</summary>
