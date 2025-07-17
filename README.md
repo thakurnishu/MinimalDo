@@ -4,16 +4,20 @@ A modern, full-stack todo application built with Go backend, vanilla JavaScript 
 
 ## 🏗️ Architecture
 
-![Architecture Diagram](.github/architecture.png)
-
 ```
-Frontend (JavaScript/HTML)  ←→  Backend (Go)  ←→  Database (PostgreSQL)
-     Port 3000                   Port 8080           Port 5432
+Frontend (React)  ←→  Backend (Go)  ←→  Database (PostgreSQL)
+     Port 3000           Port 8080           Port 5432
 ```
 
 ## 🔄 CI/CD Pipeline
 
 The project includes GitHub Actions workflows in the `.github/workflows` directory for automated testing and deployment. The workflows are triggered on push and pull requests to the main branch.
+
+### CI Workflow
+![CI Workflow](.github/images/Minimal-CI-Pipeline.excalidraw.png)
+
+### CD Workflow With GitOps
+![CD Workflow](.github/images/Minimal-CD-Workflow.excalidraw.png)
 
 ## 🛠️ Quick Start
 
@@ -36,21 +40,6 @@ make logs
 
 # Clean up containers, volumes, and images
 make clean
-
-# Run backend in development mode (requires local Go setup)
-make dev-backend
-
-# Serve frontend for development (simple HTTP server)
-make dev-frontend
-
-# Run backend tests
-make test
-
-# View database tables
-make db-tables
-
-# Install/update dependencies
-make deps
 ```
 
 ### Access the Application
