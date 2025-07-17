@@ -37,48 +37,73 @@ jobs:
             image_name: minimaldo-frontend
 
     steps:
-#    - name: Checkout code
-#      uses: actions/checkout@v4
-#      with:
-#        fetch-depth: 0
-#
-#    - name: SonarQube Scanner
-#      uses: sonarsource/sonarqube-scan-action@v5
-#      env:
-#        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-#        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
-#
-#    # Quality Gate Check
-#    - name: SonarQube Quality Gate check
-#      id: sonarqube-quality-gate-check
-#      uses: sonarsource/sonarqube-quality-gate-action@master
-#      timeout-minutes: 5
-#      env:
-#        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-#        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Create PR Comment
-      uses: actions/github-script@v7
-      env: 
-        TRIVY_SCAN: "pass"
-        APPLICATION_NAME: "${{ env.APP_NAME }}: ${{ matrix.component.name }}"
-        SONARQUBE_QUALITY_GATE: "success"
-      with: 
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const output = `
-          #### Application Name \`${process.env.APPLICATION_NAME}\`
-          #### Sonarqube Quality Gate \`${process.env.SONARQUBE_QUALITY_GATE}\`
-          #### Trivy Scan \`${process.env.TRIVY_SCAN}\`
-          `;
+      - name: Set short commit SHA
+        id: commit
+        run: echo "short_sha=pr-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
 
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: output
-          });
-        shell: bash
+      - name: Build Docker image - ${{ matrix.component.name }}
+        working-directory: ${{ matrix.component.working_dir }}
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} .
+
+      - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          output: trivy-${{ matrix.component.image_name }}.txt
+          ignore-unfixed: true
+
+      - name: cat trivy - ${{ matrix.component.name }}
+        run: cat trivy-${{ matrix.component.image_name }}.txt
+
+      - name: Pass Environment
+        id: passed_env
+        run: |
+          ## Trivy
+          trivy-${{ matrix.component.image_name }}=$(<trivy-${{ matrix.component.image_name }}.txt)
+          echo "trivy_${{ matrix.component.image_name }}<<EOF" >> $GITHUB_OUTPUT
+          echo "$trivy-${{ matrix.component.image_name }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create PR Comment
+        uses: actions/github-script@v7
+        env: 
+          TRIVY_SCAN: "pass"
+          TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_${{ matrix.component.image_name }} }}"
+          APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
+          SONARQUBE_QUALITY_GATE: "success"
+        with: 
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `
+            #### Application Name \`${process.env.APPLICATION_NAME}\`
+            #### Sonarqube Quality Gate \`${process.env.SONARQUBE_QUALITY_GATE}\`
+            #### Trivy Scan \`${process.env.TRIVY_SCAN}\`
+            #
+            <details><summary>Trivy Scan </summary>
+            \`\`\`
+            \`\`\`
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+          shell: bash
 
   sonarqube:
     if: github.event_name != 'pull_request'
