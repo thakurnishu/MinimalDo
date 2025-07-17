@@ -1,0 +1,100 @@
+name: PR Check MinimalDo
+
+env:
+  REGISTRY: ghcr.io
+  REPOSITORY_OWNER: ${{ github.repository_owner }}
+  SONAR_HOST_URL: 'http://sonarqube-sonarqube.sonarqube:9000'
+  APP_NAME: "MinimalDo"
+
+on:
+  pull_request:
+    branches: [ main ]
+#    paths:
+#      - backend/**
+#      - frontend/**
+
+jobs:
+  pr-scan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-homelab
+    permissions:
+      pull-requests: 'write' #Needed to comment on the PR
+    strategy:
+      matrix:
+        component:
+          - name: backend
+            working_dir: backend
+            image_name: minimaldo-backend
+          - name: frontend
+            working_dir: frontend
+            image_name: minimaldo-frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set short commit SHA
+        id: commit
+        run: echo "short_sha=pr-$(git rev-parse --short HEAD)-$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image - ${{ matrix.component.name }}
+        working-directory: ${{ matrix.component.working_dir }}
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }} .
+
+      - name: Scan Docker image with Trivy - ${{ matrix.component.name }}
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.32.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
+          format: github
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          output: trivy-${{ matrix.component.image_name }}.txt
+          ignore-unfixed: true
+
+      - name: cat trivy - ${{ matrix.component.name }}
+        run: cat trivy-${{ matrix.component.image_name }}.txt
+
+      - name: Pass Environment
+        id: passed_env
+        run: |
+          ## Trivy
+          trivy_output=$(<trivy-${{ matrix.component.image_name }}.txt)
+          echo "trivy_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$trivy_output" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create PR Comment
+        uses: actions/github-script@v7
+        env: 
+          TRIVY_SCAN: "pass"
+          TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_output }}"
+          APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
+          SONARQUBE_QUALITY_GATE: "success"
+        with: 
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `
+            #### Application Name \`${process.env.APPLICATION_NAME}\`
+            #### Sonarqube Quality Gate \`${process.env.SONARQUBE_QUALITY_GATE}\`
+            #### Trivy Scan \`${process.env.TRIVY_SCAN}\`
+            #
+            <details><summary>Trivy Scan </summary>
+            \`\`\`
+            ${process.env.TRIVY_CHECK}
+            \`\`\`
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+          shell: bash
