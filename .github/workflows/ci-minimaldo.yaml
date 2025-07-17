@@ -3,60 +3,17 @@ name: CI MinimalDo
 env:
   REGISTRY: ghcr.io
   REPOSITORY_OWNER: ${{ github.repository_owner }}
-  SONAR_HOST_URL: 'http://sonarqube-sonarqube.sonarqube:9000'
 
 on:
   workflow_dispatch:
-  
   push:
-    branches: [ main ]
-    paths:
-      - backend/**
-      - frontend/**
-  pull_request:
     branches: [ main ]
     paths:
       - backend/**
       - frontend/**
 
 jobs:
-  sonarqube:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-homelab
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
-
-    - name: SonarQube Scanner
-      uses: sonarsource/sonarqube-scan-action@v5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
-
-    # Quality Gate Check
-    - name: SonarQube Quality Gate check
-      id: sonarqube-quality-gate-check
-      uses: sonarsource/sonarqube-quality-gate-action@master
-      timeout-minutes: 5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
-
-    # Optional: Fail the job if Quality Gate fails
-    - name: "Quality Gate Status"
-      run: |
-        echo "Quality Gate Status: ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
-        if [ "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" != "PASSED" ]; then
-          echo "Quality Gate failed!"
-          exit 1
-        fi
-
-  # Detect which components changed
   changes:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-homelab
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
@@ -78,7 +35,6 @@ jobs:
   build-and-push:
     needs: changes
     runs-on: ubuntu-homelab
-    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write  # This allows pushing to GHCR
