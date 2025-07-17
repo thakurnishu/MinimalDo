@@ -20,16 +20,20 @@ jobs:
     permissions:
       pull-requests: 'write' #Needed to comment on the PR
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+
     - name: SonarQube Scanner
       uses: sonarsource/sonarqube-scan-action@v5
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
 
-    # Quality Gate Check
     - name: SonarQube Quality Gate check
       id: sonarqube-quality-gate-check
-      uses: sonarsource/sonarqube-quality-gate-action@master
+      uses: sonarsource/sonarqube-quality-gate-action@v4  # Use specific version instead of @master
       continue-on-error: true
       timeout-minutes: 5
       env:
@@ -39,42 +43,37 @@ jobs:
     - name: SonarQube Quality Gate Result
       id: sonarqube_result
       run: |
-        if [[ "failure" == "${{ steps.sonarqube-quality-gate-check.outcome }}" ]]; then
-          echo "sonarqube_result<<EOF" >> $GITHUB_OUTPUT
-          echo "❌ SonarQube failed" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        # Check both the step outcome and the quality gate status
+        if [[ "${{ steps.sonarqube-quality-gate-check.outcome }}" == "failure" ]] || [[ "${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" == "FAILED" ]]; then
+          echo "sonarqube_result=❌ SonarQube Quality Gate Failed" >> $GITHUB_OUTPUT
+          echo "sonarqube_status=failed" >> $GITHUB_OUTPUT
         else
-          echo "sonarqube_result<<EOF" >> $GITHUB_OUTPUT
-          echo "✅ SonarQube passed" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "sonarqube_result=✅ SonarQube Quality Gate Passed" >> $GITHUB_OUTPUT
+          echo "sonarqube_status=passed" >> $GITHUB_OUTPUT
         fi
 
     - name: Create PR Comment
       uses: actions/github-script@v7
       env: 
         SONARQUBE_QUALITY_GATE: "${{ steps.sonarqube_result.outputs.sonarqube_result }}"
+        SONARQUBE_STATUS: "${{ steps.sonarqube_result.outputs.sonarqube_status }}"
         APPLICATION_NAME: "${{ env.APP_NAME }}"
       with: 
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const output = `
           #### Application Name \`${process.env.APPLICATION_NAME}\`
-          #### Sonarqube Result \`${process.env.SONARQUBE_QUALITY_GATE}\`
+          #### SonarQube Quality Gate: ${process.env.SONARQUBE_QUALITY_GATE}
           
-          <details><summary>Trivy Scan </summary>
-          \`\`\`
-          ${process.env.TRIVY_CHECK}
-          \`\`\`
-          </details>
+          ${process.env.SONARQUBE_STATUS === 'failed' ? '⚠️ Please review and fix the quality gate issues before merging.' : ''}
           `;
-
+          
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: output
           });
-        shell: bash
 
   trivy-scan:
     if: github.event_name == 'pull_request'
@@ -112,48 +111,56 @@ jobs:
       uses: aquasecurity/trivy-action@0.32.0
       with:
         image-ref: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER }}/${{ matrix.component.image_name }}:${{ steps.commit.outputs.short_sha }}
-        format: json
+        format: table
         severity: CRITICAL,HIGH
         exit-code: '1'
         output: trivy-${{ matrix.component.image_name }}.txt
         ignore-unfixed: true
 
-    - name: cat trivy - ${{ matrix.component.name }}
-      run: cat trivy-${{ matrix.component.image_name }}.txt
+    - name: Check Trivy output exists
+      id: check_trivy_output
+      run: |
+        if [ -f "trivy-${{ matrix.component.image_name }}.txt" ]; then
+          echo "file_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "file_exists=false" >> $GITHUB_OUTPUT
+          echo "Trivy scan failed - no output file generated" > trivy-${{ matrix.component.image_name }}.txt
+        fi
 
     - name: Pass Environment
       id: passed_env
       run: |
-        ## Trivy
         trivy_output=$(<trivy-${{ matrix.component.image_name }}.txt)
         echo "trivy_output<<EOF" >> $GITHUB_OUTPUT
         echo "$trivy_output" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
+        echo "trivy_success=${{ steps.trivy.outcome }}" >> $GITHUB_OUTPUT
 
     - name: Create PR Comment
       uses: actions/github-script@v7
       env: 
         TRIVY_CHECK: "${{ steps.passed_env.outputs.trivy_output }}"
+        TRIVY_SUCCESS: "${{ steps.passed_env.outputs.trivy_success }}"
         APPLICATION_NAME: "${{ env.APP_NAME }} ${{ matrix.component.name }}"
       with: 
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
+          const success = process.env.TRIVY_SUCCESS === 'success';
+          const status = success ? '✅ PASSED' : '❌ FAILED';
           const output = `
           #### Application Name \`${process.env.APPLICATION_NAME}\`
+          #### Trivy Security Scan: ${status}
           
-          <details><summary>Check Trivy Scan</summary>
-
+          <details><summary>Check Trivy Scan Results</summary>
+          
           \`\`\`
           ${process.env.TRIVY_CHECK}
           \`\`\`
-
           </details>
           `;
-
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: output
           });
-        shell: bash
