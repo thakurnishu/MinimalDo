@@ -32,6 +32,7 @@ services:
       SERVICE_NAME: MinimalDo
       OTEL_EXPORTER_OTLP_ENDPOINT: "https://localhost:4317"
       INSECURE_MODE: true
+      GIN_MODE: debug # for production `release`, for testing `test`
     ports:
       - "8090:8090"
     depends_on:
