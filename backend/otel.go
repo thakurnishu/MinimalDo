@@ -42,7 +42,9 @@ func InitTelemetry(cfg *Config) (func(), error) {
 			attribute.String("library.language", "go"),
 		),
 	)
-	errorLog("Failed to create otlp resource", err)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
 
 	// Initialize tracing
 	traceCleanup, err := initTracing(ctx, res, cfg)
