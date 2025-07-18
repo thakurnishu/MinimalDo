@@ -1,51 +1,60 @@
 package main
 
 import (
-	"log"
-	"os"
+	"log/slog"
 )
 
-var (
+type Config struct {
 	// general
-	port string
-	frontendURL string
+	Port string
+	FrontendURL string
 
 	// Database
-	dbHost string
-	dbPort string
-	dbUser string
-	dbName string
-	dbPassword string
+	DBHost string
+	DBPort string
+	DBUser string
+	DBName string
+	DBPassword string
 	
 	// otel
-	serviceName string
-	otelEndpoint string
-	insecureMode string
-)
+	ServiceName string
+	SignozEndpoint string
 
-func loadConfig() {
-	envVars := map[string]*string{
-		"PORT":                        &port,
-		"FRONTEND_URL":               &frontendURL,
-		"DB_NAME":                    &dbName,
-		"DB_PASSWORD":                &dbPassword,
-		"DB_USER":                    &dbUser,
-		"DB_PORT":                    &dbPort,
-		"DB_HOST":                    &dbHost,
-		"SERVICE_NAME":               &serviceName,
-		"OTEL_EXPORTER_OTLP_ENDPOINT": &otelEndpoint,
-		"INSECURE_MODE":              &insecureMode,
+	// Logs
+	EnableConsoleLog bool
+	LogLevel slog.Level // values: debug, info, warn, error
+}
+
+func loadConfig() *Config {
+	cfg := &Config{
+		// General
+		Port: GetEnv("PORT"),
+		FrontendURL: GetEnv("FRONTEND_URL"),
+		// Database
+		DBHost: GetEnv("DB_HOST"),
+		DBPort: GetEnv("DB_PORT"),
+		DBUser: GetEnv("DB_USER"),
+		DBName: GetEnv("DB_NAME"),
+		DBPassword: GetEnv("DB_PASSWORD"),
+		// Otel
+		ServiceName: GetEnv("APP_NAME"),
+		SignozEndpoint: GetEnv("SIGNOZ_GPRC_ENDPOINT"),
+		// Logs
+		EnableConsoleLog: GetEnv("ENABLE_CONSOLE_LOG") == "true",
 	}
 
-	var missing []string
-	for key, ref := range envVars {
-		*ref = os.Getenv(key)
-		if *ref == "" {
-			missing = append(missing, key)
-		}
+	switch GetEnv("LOG_LEVEL") {
+	case "debug":
+		cfg.LogLevel = slog.LevelDebug
+	case "info": 
+		cfg.LogLevel = slog.LevelInfo
+	case "warn": 
+		cfg.LogLevel = slog.LevelWarn
+	case "error": 
+		cfg.LogLevel = slog.LevelError
+	default:
+		cfg.LogLevel = slog.LevelInfo
 	}
 
-	if len(missing) > 0 {
-		log.Fatalf("Missing required environment variables: %v", missing)
-	}
+	return cfg
 }

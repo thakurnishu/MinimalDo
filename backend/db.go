@@ -3,26 +3,29 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
 )
 
-func setupDB() (db *sql.DB) {
+func setupDB(cfg *Config) (db *sql.DB) {
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		dbHost, dbPort, dbUser, dbPassword, dbName)
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		log.Fatal("Failed to ping database:", err)
+		slog.Error("Failed to ping database", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize database
 	if err := initDB(db); err != nil {
-		log.Fatal("Failed to initialize database:", err)
+		slog.Error("Failed to initialize database", "error",err)
 	}
 
 	return db
