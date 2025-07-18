@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -23,16 +24,12 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-var (
-	tracer trace.Tracer
-	logger *slog.Logger
-)
 
 type MultiHandler struct {
 	handlers []slog.Handler
 }
 
-func InitTelemetry(cfg *Config) (func(), error) {
+func InitTelemetry(cfg *Config) (cleanup func(),logger *slog.Logger,tracer trace.Tracer,err error) {
 	ctx := context.Background()
 
 	// OTEL resource
@@ -43,36 +40,36 @@ func InitTelemetry(cfg *Config) (func(), error) {
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
 	// Initialize tracing
-	traceCleanup, err := initTracing(ctx, res, cfg)
+	traceCleanup, tracer, err := initTracing(ctx, res, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tracing: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to initialize tracing: %w", err)
 	}
 
 	// Initialize logging
-	logCleanup, err := initLogging(ctx, res, cfg)
+	logCleanup, logger, err := initLogging(ctx, res, cfg)
 	if err != nil {
 		traceCleanup()
-		return nil, fmt.Errorf("failed to initialize logging: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to initialize logging: %w", err)
 	}
 
 	return func() {
 		logCleanup()
 		traceCleanup()
-	}, nil
+	}, logger, tracer, nil
 }
 
-func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func(), error) {
+func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func(), trace.Tracer, error) {
 	// OTLP GRPC trace exporter
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithEndpoint(cfg.SignozEndpoint),
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create trace exportor: %w", err)
+		return nil, nil, fmt.Errorf("Failed to create trace exportor: %w", err)
 	}
 
 	// Trace provider
@@ -87,7 +84,7 @@ func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	// Tracer
-	tracer = otel.Tracer(cfg.ServiceName)
+	tracer := otel.Tracer(cfg.ServiceName)
 
 	return func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -95,17 +92,17 @@ func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func
 		if err := tp.Shutdown(shutdownCtx); err != nil {
 			slog.Error("Error shutting down tracer provider", "error", err)
 		}
-	}, nil
+	}, tracer, nil
 }
 
-func initLogging(ctx context.Context, res *resource.Resource, cfg *Config) (func(), error) {
+func initLogging(ctx context.Context, res *resource.Resource, cfg *Config) (func(), *slog.Logger, error) {
 	// OTLP GRPC log exporter
 	logExporter, err := otlploggrpc.New(ctx,
 		otlploggrpc.WithEndpoint(cfg.SignozEndpoint),
 		otlploggrpc.WithInsecure(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create log exporter: %w", err)
+		return nil, nil, fmt.Errorf("failed to create log exporter: %w", err)
 	}
 
 	// Log processor
@@ -143,7 +140,7 @@ func initLogging(ctx context.Context, res *resource.Resource, cfg *Config) (func
 	}
 
 	// Set global logger
-	logger = slog.New(logHandler)
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
 	return func() {
@@ -152,7 +149,7 @@ func initLogging(ctx context.Context, res *resource.Resource, cfg *Config) (func
 		if err := loggerProvider.Shutdown(shutdownCtx); err != nil {
 			slog.Error("Error shutting down logger provider", "error", err)
 		}
-	}, nil
+	}, logger, nil
 }
 
 // Implements slog.Handler interface methods
@@ -195,4 +192,49 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 		newHandlers[i] = handler.WithGroup(name)
 	}
 	return &MultiHandler{handlers: newHandlers}
+}
+
+// Custom logging middleware that works with OpenTelemetry
+func LoggingMiddleware(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		method := c.Request.Method
+
+		// Add request context to logger
+		ctx := c.Request.Context()
+		
+		// Get trace information if available
+		span := trace.SpanFromContext(ctx)
+		traceID := span.SpanContext().TraceID().String()
+		spanID := span.SpanContext().SpanID().String()
+
+		logger.InfoContext(ctx, "Request started",
+			slog.String("method", method),
+			slog.String("path", path),
+			slog.String("trace_id", traceID),
+			slog.String("span_id", spanID),
+		)
+
+		c.Next()
+
+		duration := time.Since(start)
+		status := c.Writer.Status()
+
+		logLevel := slog.LevelInfo
+		if status >= 400 {
+			logLevel = slog.LevelError
+		} else if status >= 300 {
+			logLevel = slog.LevelWarn
+		}
+
+		logger.Log(ctx, logLevel, "Request completed",
+			slog.String("method", method),
+			slog.String("path", path),
+			slog.Int("status", status),
+			slog.Duration("duration", duration),
+			slog.String("trace_id", traceID),
+			slog.String("span_id", spanID),
+		)
+	}
 }

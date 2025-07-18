@@ -32,7 +32,7 @@ services:
       GIN_MODE: release # for production `release`, for testing `test`, for debugging `debug`
       APP_NAME: MinimalDo
       SIGNOZ_GPRC_ENDPOINT: "localhost:4317"
-      ENABLE_CONSOLE_LOG: "true"
+      ENABLE_CONSOLE_LOG: "false"
       LOG_LEVEL: "debug" # debug, info, warn, error
     ports:
       - "8090:8090"
