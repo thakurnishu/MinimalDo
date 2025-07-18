@@ -503,7 +503,6 @@ func errorLogger(
 	logger.ErrorContext(ctx, message,
 		slog.String("error", err.Error()),
 	)
-
 	span.RecordError(err)
 	span.SetStatus(codes.Error, message)
 }

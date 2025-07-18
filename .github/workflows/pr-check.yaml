@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-homelab
     permissions:
       pull-requests: 'write' #Needed to comment on the PR
+    outputs:
+      sonarqube_status: ${{ steps.sonarqube_result.outputs.sonarqube_status }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -92,12 +94,15 @@ jobs:
               - 'backend/**'
             frontend:
               - 'frontend/**'
+
   trivy-scan:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-homelab
     needs: changes
     permissions:
       pull-requests: 'write' #Needed to comment on the PR
+    outputs:
+      trivy_status: ${{ steps.set_trivy_status.outputs.trivy_status }}
     strategy:
       matrix:
         component:
@@ -174,6 +179,16 @@ jobs:
         echo "EOF" >> $GITHUB_OUTPUT
         echo "trivy_success=${{ steps.trivy.outcome }}" >> $GITHUB_OUTPUT
 
+    - name: Set Trivy Status
+      if: steps.should_skip.outputs.skip != 'true'
+      id: set_trivy_status
+      run: |
+        if [ "${{ steps.trivy.outcome }}" = "success" ]; then
+          echo "trivy_status=passed" >> $GITHUB_OUTPUT
+        else
+          echo "trivy_status=failed" >> $GITHUB_OUTPUT
+        fi
+
     - name: Create PR Comment
       if: steps.should_skip.outputs.skip != 'true'
       uses: actions/github-script@v7
@@ -203,3 +218,23 @@ jobs:
             repo: context.repo.repo,
             body: output
           });
+
+  final-check:
+    if: always()
+    runs-on: ubuntu-homelab
+    needs: [sonarqube-scan, trivy-scan]
+    steps:
+    - name: Check overall status
+      run: |
+        sonarqube_status="${{ needs.sonarqube-scan.outputs.sonarqube_status }}"
+        trivy_status="${{ needs.trivy-scan.outputs.trivy_status }}"
+        
+        echo "SonarQube Status: $sonarqube_status"
+        echo "Trivy Status: $trivy_status"
+        
+        if [ "$sonarqube_status" = "failed" ] || [ "$trivy_status" = "failed" ]; then
+          echo "❌ One or more checks failed"
+          exit 1
+        else
+          echo "✅ All checks passed"
+        fi
