@@ -8,8 +8,6 @@ help:
 	@echo "  down         - Stop all services"
 	@echo "  logs         - Show logs from all services"
 	@echo "  clean        - Clean up containers and volumes"
-	@echo "  dev-backend  - Run backend in development mode"
-	@echo "  dev-frontend - Serve frontend for development"
 
 # Build all Docker images
 build:
@@ -35,31 +33,3 @@ logs:
 clean:
 	docker compose down -v --remove-orphans
 	docker rmi minimaldo-frontend minimaldo-backend
-
-
-# Development mode for backend
-dev-backend:
-	@echo "Starting backend in development mode..."
-	@echo "Make sure PostgreSQL is running on localhost:5432"
-	cd backend && go mod tidy && go run main.go
-
-# Development mode for frontend (simple HTTP server)
-dev-frontend:
-	@echo "Starting frontend development server..."
-	@echo "Frontend will be available at http://localhost:8000"
-	cd frontend && python3 -m http.server 8000
-
-# Run tests (placeholder for future tests)
-test:
-	@echo "Running tests..."
-	cd backend && go test ./...
-
-# Install dependencies
-deps:
-	@echo "Installing backend dependencies..."
-	cd backend && go mod tidy
-	@echo "Dependencies installed!"
-
-# List Table Content
-db-tables:
-	docker exec -it todo_postgres bash -c 'psql -U postgres -d todoapp -c "SELECT * FROM todos"'

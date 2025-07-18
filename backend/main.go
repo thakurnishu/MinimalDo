@@ -1,9 +1,8 @@
 package main
 
 import (
-	"context"
 	"database/sql"
-	"log"
+	"log/slog"
 
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -16,20 +15,19 @@ var (
 	db *sql.DB
 )
 
-func init() {
-	loadConfig()
-}
 
 func main() {
-	// Otel 
-	cleanup := initTracer()
-	defer func() {
-		if err := cleanup(context.Background()); err != nil {
-			log.Fatalf("Failed to shutdown tracer: %v", err)
-		}
-	}()
+	cfg := loadConfig()
 
-	db := setupDB()
+	// Otel init
+	cleanup, err := InitTelemetry(cfg)
+	if err != nil {
+		slog.Error("Failed to initialize telemetry", "error", err)
+	}
+
+	defer cleanup()
+
+	db := setupDB(cfg)
 	defer db.Close()
 	server := &Server{
 		db: db,
@@ -39,12 +37,12 @@ func main() {
 
 	// CORS setup
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{frontendURL},
+		AllowOrigins: []string{cfg.FrontendURL},
 		AllowHeaders: []string{"X-Requested-With", "Content-Type", "Authorization"},
 		AllowMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
 		ExposeHeaders: []string{"Content-Length"},
 	}))
-	router.Use(otelgin.Middleware(serviceName))
+	router.Use(otelgin.Middleware(cfg.ServiceName))
 
 	// Setup routes
 	api := router.Group("/api")
@@ -57,6 +55,6 @@ func main() {
 		api.GET("/todos/by-date", server.getTodosByDate)
 	}
 	
-	log.Printf("Server starting on port %s", port)
-	router.Run(":"+port)
+	slog.Info("server is listening", "port", cfg.Port)
+	router.Run(":"+cfg.Port)
 }

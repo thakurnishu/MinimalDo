@@ -29,10 +29,11 @@ services:
       DB_NAME: todoapp
       PORT: 8090
       FRONTEND_URL: "http://localhost:3000"
-      SERVICE_NAME: MinimalDo
-      OTEL_EXPORTER_OTLP_ENDPOINT: "https://localhost:4317"
-      INSECURE_MODE: true
-      GIN_MODE: debug # for production `release`, for testing `test`
+      GIN_MODE: release # for production `release`, for testing `test`, for debugging `debug`
+      APP_NAME: MinimalDo
+      SIGNOZ_GPRC_ENDPOINT: "localhost:4317"
+      ENABLE_CONSOLE_LOG: "true"
+      LOG_LEVEL: "debug" # debug, info, warn, error
     ports:
       - "8090:8090"
     depends_on:
