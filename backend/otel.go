@@ -196,7 +196,7 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 }
 
 var excludedPaths = map[string]bool {
-	"/health": true,
+	"/api/health": true,
 }
 
 func TracingMiddleware(serviceName string) gin.HandlerFunc {
