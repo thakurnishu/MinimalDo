@@ -5,8 +5,6 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
