@@ -40,7 +40,7 @@ func main() {
 		AllowMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
 		ExposeHeaders: []string{"Content-Length"},
 	}))
-	router.Use(otelgin.Middleware(cfg.ServiceName))
+	router.Use(TracingMiddleware(cfg.ServiceName))
 	router.Use(LoggingMiddleware(logger))
 
 	// Setup routes

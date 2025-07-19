@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
@@ -198,12 +199,23 @@ var excludedPaths = map[string]bool {
 	"/health": true,
 }
 
+func TracingMiddleware(serviceName string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if excludedPaths[c.FullPath()] {
+			c.Next()
+			return
+		}
+		otelgin.Middleware(serviceName)
+	}
+}
+
 // Custom logging middleware that works with OpenTelemetry
 func LoggingMiddleware(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		if excludedPaths[c.FullPath()] {
 			c.Next()
+			return
 		}
 		start := time.Now()
 		path := c.Request.URL.Path
