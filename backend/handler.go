@@ -220,23 +220,11 @@ func (s *Server) deleteTodo(c *gin.Context) {
 }
 
 func (s *Server) healthCheck(c *gin.Context) {
-	ctx, span := s.tracer.Start(c.Request.Context(), "health_check")
-	defer span.End()
-
 	timeNow := time.Now().Format(time.RFC3339)
 	response := map[string]string{
 		"status": "healthy",
 		"time":   timeNow,
 	}
-	s.logger.InfoContext(ctx, "health_check",
-		slog.Bool("healthy", true),
-		slog.String("time", timeNow),
-	)
-	span.SetAttributes(
-		attribute.Bool("healthy", true),
-		attribute.String("time", timeNow),
-	)
-
 	c.JSON(http.StatusOK, response)
 }
 
