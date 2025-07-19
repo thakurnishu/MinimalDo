@@ -16,6 +16,15 @@ services:
       timeout: 5s
       retries: 5
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
   backend:
     build:
       context: ./backend
@@ -31,7 +40,7 @@ services:
       FRONTEND_URL: "http://localhost:3000"
       GIN_MODE: release # for production `release`, for testing `test`, for debugging `debug`
       APP_NAME: MinimalDo
-      SIGNOZ_GPRC_ENDPOINT: "localhost:4317"
+      OTEL_EXPORTER_OTLP_ENDPOINT_GRPC: "otel-collector:4317"
       ENABLE_CONSOLE_LOG: "false"
       LOG_LEVEL: "debug" # debug, info, warn, error
     ports:
@@ -39,6 +48,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     restart: unless-stopped
 
   frontend:
@@ -51,7 +62,8 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
