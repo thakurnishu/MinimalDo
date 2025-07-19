@@ -24,12 +24,7 @@ func (s *Server) getTodos(c *gin.Context) {
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "query failed",
-			slog.String("error", err.Error()),
-		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "query failed")
-
+		logError("query failed", ctx, s.logger, span, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -47,7 +42,7 @@ func (s *Server) getTodos(c *gin.Context) {
 			&t.UpdatedAt,
 		)
 		if err != nil {
-			errorLogger("rows scan failed", ctx, s.logger, span, err)
+			logError("rows scan failed", ctx, s.logger, span, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -70,7 +65,7 @@ func (s *Server) createTodo(c *gin.Context) {
 
 	var t Todo
 	if err := c.BindJSON(&t); err != nil {
-		errorLogger("failed to parse json", ctx, s.logger, span, err)
+		logError("failed to parse json", ctx, s.logger, span, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -88,7 +83,7 @@ func (s *Server) createTodo(c *gin.Context) {
 		t.Completed,
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
-		errorLogger("row scan failed", ctx, s.logger, span, err)
+		logError("row scan failed", ctx, s.logger, span, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -106,26 +101,30 @@ func (s *Server) createTodo(c *gin.Context) {
 }
 
 func (s *Server) updateTodo(c *gin.Context) {
-	ctx, span := s.tracer.Start(c.Request.Context(), "update_todos")
+	ctx, span := s.tracer.Start(c.Request.Context(), "update_todo")
 	defer span.End()
 
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "invalid id",
+		logError("invalid id", ctx, s.logger, span,err, 
 			slog.String("task_id", idStr),
-			slog.String("error", err.Error()),
 		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invalid id")
 
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invaild ID"})
 		return
 	}
 
+	s.logger.InfoContext(ctx, "todo to update", 
+		slog.String("todo_id", idStr),
+	)
+	span.SetAttributes(
+		attribute.String("todo.id", idStr),
+	)
+
 	var t Todo
 	if err := c.BindJSON(&t); err != nil {
-		errorLogger("failed to parse json", ctx, s.logger, span, err)
+		logError("failed to parse json", ctx, s.logger, span, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 
@@ -145,21 +144,13 @@ func (s *Server) updateTodo(c *gin.Context) {
 	).Scan(&t.ID, &t.Title, &t.Description, &t.Completed, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			s.logger.ErrorContext(ctx, "task not found",
+			logError("task not found", ctx, s.logger, span, err, 
 				slog.Int("task_id", id),
-				slog.String("error", err.Error()),
 			)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "task not found")
-
 			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
-		s.logger.ErrorContext(ctx, "row scan failed",
-			slog.String("error", err.Error()),
-		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "row scan failed")
+		logError("row scan failed", ctx, s.logger, span, err)
 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -185,37 +176,23 @@ func (s *Server) deleteTodo(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "invalid id",
+		logError("invalid id", ctx, s.logger, span, err,
 			slog.String("task_id", idStr),
-			slog.String("error", err.Error()),
 		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invalid id")
-
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invaild ID"})
 		return
 	}
 
 	result, err := s.db.Exec("DELETE FROM todos WHERE id = $1", id)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "query execution failed",
-			slog.String("error", err.Error()),
-		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "query execution failed")
-
+		logError("query execution failed", ctx, s.logger, span, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.ErrorContext(ctx, "affected rows check failed",
-			slog.String("error", err.Error()),
-		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "affected rows check failed")
-
+		logError("affected rows check failed", ctx, s.logger, span, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -284,15 +261,9 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 	// Parse and validate date
 	baseDate, err := time.Parse(dataLayout, dateStr)
 	if err != nil {
-
-		s.logger.ErrorContext(ctx, "invalid date format provided",
+		logError("invalid date format provided", ctx, s.logger, span, err,
 			slog.String("date", dateStr),
-			slog.String("error", err.Error()),
 		)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invalid date format")
-		span.SetAttributes(attribute.String("error.type", "invalid_date_format"))
-
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
 		return
 	}
@@ -325,15 +296,11 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 		start = time.Date(baseDate.Year(), baseDate.Month(), 1, 0, 0, 0, 0, time.UTC)
 		end = start.AddDate(0, 1, 0)
 	default:
-		s.logger.ErrorContext(ctx, "invalid range type provided",
+		logError("invalid range type provided", ctx, s.logger, dateRangeSpan, err,
 			slog.String("range_type", rangeType),
 		)
-		dateRangeSpan.RecordError(err)
-		dateRangeSpan.SetStatus(codes.Error, "invalid range type")
-		dateRangeSpan.SetAttributes(attribute.String("error.type", "invalid_range_type"))
 		dateRangeSpan.End()
 		span.SetStatus(codes.Error, "invalid range type")
-
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid range type"})
 		return
 	}
@@ -370,16 +337,12 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 	`, start, end)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "database query failed",
-			slog.String("error", err.Error()),
+		logError("database query failed", ctx, s.logger, querySpan, err,
 			slog.String("start_date", start.Format(time.RFC3339)),
 			slog.String("end_date", end.Format(time.RFC3339)),
 		)
-		querySpan.RecordError(err)
-		querySpan.SetStatus(codes.Error, "database query failed")
 		querySpan.End()
 		span.SetStatus(codes.Error, "database query failed")
-
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -400,15 +363,13 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 			&t.UpdatedAt,
 		)
 		if err != nil {
-			s.logger.ErrorContext(ctx, "row scan failed",
+			logError("row scan failed", ctx, s.logger, scanSpan, err,
 				slog.String("error", err.Error()),
 				slog.Int("scanned_count", todoCount),
 			)
-			scanSpan.RecordError(err)
-			scanSpan.SetStatus(codes.Error, "row scan failed")
 			scanSpan.End()
 			querySpan.End()
-			span.SetStatus(codes.Error, "Row scanning failed")
+			span.SetStatus(codes.Error, "row scanning failed")
 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -493,17 +454,13 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 	c.JSON(http.StatusOK, todos)
 }
 
-func errorLogger(
-	message string,
-	ctx context.Context,
-	logger *slog.Logger,
-	span trace.Span,
-	err error,
-) {
-	logger.ErrorContext(ctx, message,
+func logError(msg string, ctx context.Context, logger *slog.Logger, span trace.Span, err error, attrs ...slog.Attr) {
+	baseAttrs := []slog.Attr{
 		slog.String("error", err.Error()),
-	)
+	}
+	allAttrs := append(baseAttrs, attrs...)
+	logger.LogAttrs(ctx, slog.LevelError, msg, allAttrs...)
 
 	span.RecordError(err)
-	span.SetStatus(codes.Error, message)
+	span.SetStatus(codes.Error, msg)
 }
