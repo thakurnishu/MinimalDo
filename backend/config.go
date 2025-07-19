@@ -18,7 +18,7 @@ type Config struct {
 	
 	// otel
 	ServiceName string
-	SignozEndpoint string
+	OtelExporterOtlpEndpointGRPC string
 
 	// Logs
 	EnableConsoleLog bool
@@ -38,7 +38,7 @@ func loadConfig() *Config {
 		DBPassword: GetEnv("DB_PASSWORD"),
 		// Otel
 		ServiceName: GetEnv("APP_NAME"),
-		SignozEndpoint: GetEnv("SIGNOZ_GPRC_ENDPOINT"),
+		OtelExporterOtlpEndpointGRPC: GetEnv("OTEL_EXPORTER_OTLP_ENDPOINT_GRPC"),
 		// Logs
 		EnableConsoleLog: GetEnv("ENABLE_CONSOLE_LOG") == "true",
 	}

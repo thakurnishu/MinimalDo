@@ -66,7 +66,7 @@ func InitTelemetry(cfg *Config) (cleanup func(),logger *slog.Logger,tracer trace
 func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func(), trace.Tracer, error) {
 	// OTLP GRPC trace exporter
 	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(cfg.SignozEndpoint),
+		otlptracegrpc.WithEndpoint(cfg.OtelExporterOtlpEndpointGRPC),
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
@@ -99,7 +99,7 @@ func initTracing(ctx context.Context, res *resource.Resource, cfg *Config) (func
 func initLogging(ctx context.Context, res *resource.Resource, cfg *Config) (func(), *slog.Logger, error) {
 	// OTLP GRPC log exporter
 	logExporter, err := otlploggrpc.New(ctx,
-		otlploggrpc.WithEndpoint(cfg.SignozEndpoint),
+		otlploggrpc.WithEndpoint(cfg.OtelExporterOtlpEndpointGRPC),
 		otlploggrpc.WithInsecure(),
 	)
 	if err != nil {
