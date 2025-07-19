@@ -194,9 +194,17 @@ func (h *MultiHandler) WithGroup(name string) slog.Handler {
 	return &MultiHandler{handlers: newHandlers}
 }
 
+var excludedPaths = map[string]bool {
+	"/health": true,
+}
+
 // Custom logging middleware that works with OpenTelemetry
 func LoggingMiddleware(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+
+		if excludedPaths[c.FullPath()] {
+			c.Next()
+		}
 		start := time.Now()
 		path := c.Request.URL.Path
 		method := c.Request.Method
