@@ -2,7 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"log/slog"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Todo struct {
@@ -16,6 +19,8 @@ type Todo struct {
 
 type Server struct {
 	db *sql.DB
+	tracer trace.Tracer
+	logger *slog.Logger
 }
 
 type DateRange struct {

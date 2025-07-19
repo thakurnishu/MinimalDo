@@ -1,18 +1,14 @@
 package main
 
 import (
-	"database/sql"
 	"log/slog"
 
 	_ "github.com/lib/pq"
+
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	db *sql.DB
 )
 
 
@@ -20,7 +16,7 @@ func main() {
 	cfg := loadConfig()
 
 	// Otel init
-	cleanup, err := InitTelemetry(cfg)
+	cleanup, logger, tracer, err := InitTelemetry(cfg)
 	if err != nil {
 		slog.Error("Failed to initialize telemetry", "error", err)
 	}
@@ -31,6 +27,8 @@ func main() {
 	defer db.Close()
 	server := &Server{
 		db: db,
+		logger: logger,
+		tracer: tracer,
 	}
 
 	router := gin.Default()
@@ -43,6 +41,7 @@ func main() {
 		ExposeHeaders: []string{"Content-Length"},
 	}))
 	router.Use(otelgin.Middleware(cfg.ServiceName))
+	router.Use(LoggingMiddleware(logger))
 
 	// Setup routes
 	api := router.Group("/api")
