@@ -51,7 +51,7 @@ func main() {
 		api.GET("/health", server.healthCheck)
 		api.GET("/todos/by-date", server.getTodosByDate)
 	}
-	
+
 	slog.Info("server is listening", "port", cfg.Port)
 	router.Run(":"+cfg.Port)
 }
