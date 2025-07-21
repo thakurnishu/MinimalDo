@@ -60,3 +60,4 @@ func initDB(db *sql.DB) error {
 	_, err := db.Exec(query)
 	return err
 }
+

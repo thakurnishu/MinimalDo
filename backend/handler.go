@@ -438,6 +438,7 @@ func (s *Server) getTodosByDate(c *gin.Context) {
 		attribute.String("response.type", "list"),
 		attribute.String("response.status", "success"),
 	)
+
 	c.JSON(http.StatusOK, todos)
 }
 
